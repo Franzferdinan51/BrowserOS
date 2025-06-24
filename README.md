@@ -1,13 +1,14 @@
 <div align="center">
 
-# Nxtscape Browser
+# 
+<img src="https://pub-2a22685ef49b4deca0f3da6201149bdf.r2.dev/nxtscape-banner.png" alt="backed-by-yc" >
 
 ### Your browser, with AI superpowers 🚀
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20us-blue)](https://discord.gg/YKwjt5vuKr)
 [![Twitter](https://img.shields.io/twitter/follow/nxtscape?style=social)](https://twitter.com/nxtscape)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
-<a href="https://bit.ly/4k0gjsD">
+<a href="https://github.com/nxtscape/nxtscape/releases/download/v0.1.0/Nxtscape_v0.1.0.dmg">
   <img src="https://img.shields.io/badge/Download-macOS-black?style=flat&logo=apple&logoColor=white" alt="Download for macOS" />
 </a>
 

@@ -8,7 +8,7 @@
 [![Discord](https://img.shields.io/badge/Discord-Join%20us-blue)](https://discord.gg/YKwjt5vuKr)
 [![Twitter](https://img.shields.io/twitter/follow/nxtscape?style=social)](https://twitter.com/nxtscape)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
-<a href="https://github.com/nxtscape/nxtscape/releases/download/v0.1.0/Nxtscape_v0.1.0.dmg">
+<a href="https://bit.ly/nxtscape">
   <img src="https://img.shields.io/badge/Download-macOS-black?style=flat&logo=apple&logoColor=white" alt="Download for macOS" />
 </a>
 

@@ -12,9 +12,9 @@
       <title>Nxtscape - 0.5.0</title>
       <description sparkle:format="plain-text">
 - Improved Ollama support
-- Fixed the issue with unified agent
+- Fixed issues with the unified agent
       </description>
-      <sparkle:version>7157.87</sparkle:version>
+      <sparkle:version>7158.88</sparkle:version>
       <sparkle:shortVersionString>0.4.0</sparkle:shortVersionString>
       <pubDate>Thu, 26 Jun 2025 17:42:44 -0700</pubDate>
       <link>https://nxtscape.ai</link>

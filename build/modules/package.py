@@ -249,9 +249,20 @@ def package_universal(contexts: List[BuildContext]) -> bool:
     dmg_dir = contexts[0].root_dir / "dmg"
     dmg_dir.mkdir(parents=True, exist_ok=True)
     
-    # Generate universal DMG name
-    base_name = f"Nxtscape_{contexts[0].nxtscape_chromium_version}"
-    dmg_name = f"{base_name}_universal.dmg"
+    # Create a temporary universal context for DMG naming
+    universal_ctx = BuildContext(
+        root_dir=contexts[0].root_dir,
+        chromium_src=contexts[0].chromium_src,
+        architecture="universal",
+        build_type=contexts[0].build_type,
+        apply_patches=False,
+        sign_package=contexts[0].sign_package,
+        package=False,
+        build=False,
+    )
+    
+    # Use context's DMG naming
+    dmg_name = universal_ctx.get_dmg_name()
     dmg_path = dmg_dir / dmg_name
     
     # Get pkg-dmg tool
@@ -260,14 +271,6 @@ def package_universal(contexts: List[BuildContext]) -> bool:
     # Create the universal DMG
     if create_dmg(universal_app_path, dmg_path, "Nxtscape", pkg_dmg_path):
         log_success(f"Universal DMG created: {dmg_name}")
-        
-        # Also create signed version if signing was enabled
-        if contexts[0].sign_package:
-            signed_dmg_path = dmg_dir / f"{base_name}_universal_signed.dmg"
-            if dmg_path.exists():
-                shutil.copy2(dmg_path, signed_dmg_path)
-                log_success(f"Signed universal DMG: {signed_dmg_path.name}")
-        
         return True
     else:
         log_error("Failed to create universal DMG")

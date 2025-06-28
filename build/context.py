@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from utils import log_info, log_error, log_success, log_warning
 
 
-
 @dataclass
 class BuildContext:
     """Simple dataclass to hold all build state"""
@@ -40,18 +39,18 @@ class BuildContext:
         """Load version files and set architecture-specific out_dir"""
         # Set architecture-specific output directory
         self.out_dir = f"out/Default_{self.architecture}"
-        
+
         version_dict = {}
-        
+
         if not self.chromium_version:
             # Read from VERSION file
             version_file = self.root_dir / "CHROMIUM_VERSION"
             if version_file.exists():
                 # Parse VERSION file format: MAJOR=137\nMINOR=0\nBUILD=7151\nPATCH=69
-                for line in version_file.read_text().strip().split('\n'):
-                    key, value = line.split('=')
+                for line in version_file.read_text().strip().split("\n"):
+                    key, value = line.split("=")
                     version_dict[key] = value
-                
+
                 # Construct chromium_version as MAJOR.MINOR.BUILD.PATCH
                 self.chromium_version = f"{version_dict['MAJOR']}.{version_dict['MINOR']}.{version_dict['BUILD']}.{version_dict['PATCH']}"
 
@@ -64,18 +63,22 @@ class BuildContext:
         # Set nxtscape_chromium_version as chromium version with BUILD + nxtscape_version
         if self.chromium_version and self.nxtscape_version and version_dict:
             # Calculate new BUILD number by adding nxtscape_version to original BUILD
-            new_build = int(version_dict['BUILD']) + int(self.nxtscape_version)
+            new_build = int(version_dict["BUILD"]) + int(self.nxtscape_version)
             self.nxtscape_chromium_version = f"{version_dict['MAJOR']}.{version_dict['MINOR']}.{new_build}.{version_dict['PATCH']}"
 
-    # Determine chromium source directory
+        # Determine chromium source directory
         if self.chromium_src and self.chromium_src.exists():
             log_warning(f"📁 Using provided Chromium source: {self.chromium_src}")
         else:
             log_warning(f"⚠️  Provided path does not exist: {self.chromium_src}")
             self.chromium_src = self.root_dir / "chromium_src"
             if not self.chromium_src.exists():
-                log_error(f"⚠️  Default Chromium source path does not exist: {self.chromium_src}")
-                raise FileNotFoundError(f"Chromium source path does not exist: {self.chromium_src}")
+                log_error(
+                    f"⚠️  Default Chromium source path does not exist: {self.chromium_src}"
+                )
+                raise FileNotFoundError(
+                    f"Chromium source path does not exist: {self.chromium_src}"
+                )
 
         self.start_time = time.time()
 
@@ -164,9 +167,16 @@ class BuildContext:
         """Get notarization zip path"""
         return self.chromium_src / self.out_dir / "notarize.zip"
 
-    def get_dmg_name(self) -> str:
-        """Get DMG filename"""
-        return f"Nxtscape_{self.nxtscape_chromium_version}.dmg"
+    def get_dmg_name(self, signed=False) -> str:
+        """Get DMG filename with architecture suffix"""
+        if self.architecture == "universal":
+            if signed:
+                return f"Nxtscape_{self.nxtscape_chromium_version}_universal_signed.dmg"
+            return f"Nxtscape_{self.nxtscape_chromium_version}_universal.dmg"
+        else:
+            if signed:
+                return f"Nxtscape_{self.nxtscape_chromium_version}_{self.architecture}_signed.dmg"
+            return f"Nxtscape_{self.nxtscape_chromium_version}_{self.architecture}.dmg"
 
     # Extension names
     def get_ai_extensions(self) -> list[str]:
@@ -181,4 +191,3 @@ class BuildContext:
     def get_base_identifier(self) -> str:
         """Get base identifier for components"""
         return "org.nxtscape"
-

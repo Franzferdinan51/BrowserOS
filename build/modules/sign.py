@@ -564,7 +564,7 @@ def sign_app(ctx: BuildContext, create_dmg: bool = True) -> bool:
     dmg_path = None
     if create_dmg:
         dmg_dir = ctx.root_dir / "dmg"
-        dmg_name = ctx.get_dmg_name().replace(".dmg", "_signed.dmg")
+        dmg_name = ctx.get_dmg_name(True)
         dmg_path = dmg_dir / dmg_name
 
     # Verify app exists
@@ -712,7 +712,7 @@ def sign_universal(contexts: List[BuildContext]) -> bool:
             
         log_success("Universal binary signed successfully!")
         return True
-        
+
     except Exception as e:
         log_error(f"Failed to create universal binary: {e}")
         return False

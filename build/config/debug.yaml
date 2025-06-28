@@ -5,12 +5,6 @@ build:
   # architectures: [x86_64, arm64]  # Uncomment for multi-arch debug
   # universal: false  # Uncomment to disable universal for debug
 
-chromium:
-  version_file: build/config/versions/chromium_version.txt
-
-nxtscape:
-  version_file: build/config/versions/nxtscape_version.txt
-
 gn_flags:
   file: build/config/gn/flags.macos.debug.gn
 

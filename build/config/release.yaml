@@ -5,12 +5,6 @@ build:
   architectures: [x86_64, arm64] # List for multi-architecture builds
   universal: true # Create universal binary from multiple architectures
 
-chromium:
-  version_file: build/config/versions/chromium_version.txt
-
-nxtscape:
-  version_file: build/config/versions/nxtscape_version.txt
-
 gn_flags:
   file: build/config/gn/flags.macos.release.gn
 
@@ -29,11 +23,6 @@ paths:
 # Environment-specific settings
 env:
   PYTHONPATH: scripts
-
-# Release-specific settings
-release:
-  create_dmg: true
-  dmg_name_format: "Nxtscape_{chromium_version}-.{nxtscape_version}.dmg"
 
 # Signing configuration (requires environment variables)
 signing:

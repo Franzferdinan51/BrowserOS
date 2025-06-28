@@ -225,3 +225,50 @@ def create_signed_notarized_dmg(app_path: Path, dmg_path: Path,
     log_success(f"DMG package ready: {dmg_path}")
     log_info("="*70)
     return True
+
+
+def package_universal(contexts: List[BuildContext]) -> bool:
+    """Create DMG package for universal binary"""
+    log_info("=" * 70)
+    log_info("📦 Creating universal DMG package...")
+    log_info("=" * 70)
+    
+    if len(contexts) < 2:
+        log_error("Universal packaging requires at least 2 architectures")
+        return False
+    
+    # Use the universal app path
+    universal_dir = contexts[0].chromium_src / "out/Default_universal"
+    universal_app_path = universal_dir / contexts[0].NXTSCAPE_APP_NAME
+    
+    if not universal_app_path.exists():
+        log_error(f"Universal app not found: {universal_app_path}")
+        return False
+    
+    # Create DMG in root dmg directory
+    dmg_dir = contexts[0].root_dir / "dmg"
+    dmg_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Generate universal DMG name
+    base_name = f"Nxtscape_{contexts[0].nxtscape_chromium_version}"
+    dmg_name = f"{base_name}_universal.dmg"
+    dmg_path = dmg_dir / dmg_name
+    
+    # Get pkg-dmg tool
+    pkg_dmg_path = contexts[0].get_pkg_dmg_path()
+    
+    # Create the universal DMG
+    if create_dmg(universal_app_path, dmg_path, "Nxtscape", pkg_dmg_path):
+        log_success(f"Universal DMG created: {dmg_name}")
+        
+        # Also create signed version if signing was enabled
+        if contexts[0].sign_package:
+            signed_dmg_path = dmg_dir / f"{base_name}_universal_signed.dmg"
+            if dmg_path.exists():
+                shutil.copy2(dmg_path, signed_dmg_path)
+                log_success(f"Signed universal DMG: {signed_dmg_path.name}")
+        
+        return True
+    else:
+        log_error("Failed to create universal DMG")
+        return False

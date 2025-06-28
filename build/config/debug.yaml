@@ -1,14 +1,16 @@
 # Nxtscape Debug Build Configuration
 build:
   type: debug
-  architecture: arm64
-  
+  architecture: arm64 # Single arch for faster debug builds
+  # architectures: [x86_64, arm64]  # Uncomment for multi-arch debug
+  # universal: false  # Uncomment to disable universal for debug
+
 chromium:
   version_file: build/config/versions/chromium_version.txt
-  
+
 nxtscape:
   version_file: build/config/versions/nxtscape_version.txt
-  
+
 gn_flags:
   file: build/config/gn/flags.macos.debug.gn
 
@@ -23,7 +25,6 @@ steps:
 paths:
   root_dir: .
   chromium_src: build/src
-  out_dir: out/Default
 
 # Environment-specific settings
 env:
@@ -31,4 +32,5 @@ env:
 
 # Notification settings
 notifications:
-  slack: false  # Set to true to enable Slack notifications for debug builds 
+  slack: false # Set to true to enable Slack notifications for debug builds
+

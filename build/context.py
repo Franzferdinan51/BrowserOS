@@ -37,7 +37,10 @@ class BuildContext:
     SPARKLE_VERSION: str = "2.7.0"
 
     def __post_init__(self):
-        """Load version files"""
+        """Load version files and set architecture-specific out_dir"""
+        # Set architecture-specific output directory
+        self.out_dir = f"out/Default_{self.architecture}"
+        
         version_dict = {}
         
         if not self.chromium_version:

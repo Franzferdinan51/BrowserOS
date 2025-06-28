@@ -1,14 +1,16 @@
 # Nxtscape Release Build Configuration
 build:
   type: release
-  architecture: arm64
-  
+  # architecture: arm64  # Default single architecture
+  architectures: [x86_64, arm64] # List for multi-architecture builds
+  universal: true # Create universal binary from multiple architectures
+
 chromium:
   version_file: build/config/versions/chromium_version.txt
-  
+
 nxtscape:
   version_file: build/config/versions/nxtscape_version.txt
-  
+
 gn_flags:
   file: build/config/gn/flags.macos.release.gn
 
@@ -23,7 +25,6 @@ steps:
 paths:
   root_dir: .
   chromium_src: build/src
-  out_dir: out/Default
 
 # Environment-specific settings
 env:
@@ -33,7 +34,7 @@ env:
 release:
   create_dmg: true
   dmg_name_format: "Nxtscape_{chromium_version}-.{nxtscape_version}.dmg"
-  
+
 # Signing configuration (requires environment variables)
 signing:
   require_env_vars:
@@ -44,4 +45,5 @@ signing:
 
 # Notification settings
 notifications:
-  slack: true  # Enable Slack notifications for release builds 
+  slack: true # Enable Slack notifications for release builds
+

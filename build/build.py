@@ -198,6 +198,28 @@ def build_main(
             log_info("🔄 Creating universal binary...")
             log_info(f"{'='*60}")
 
+            # Import merge function
+            from modules.merge import merge_architectures
+            
+            # Get paths for the built apps
+            arch1_app = built_contexts[0].get_app_path()
+            arch2_app = built_contexts[1].get_app_path()
+            
+            # Create universal output path
+            universal_dir = built_contexts[0].chromium_src / "out/Default_universal"
+            universal_dir.mkdir(parents=True, exist_ok=True)
+            universal_app_path = universal_dir / built_contexts[0].NXTSCAPE_APP_NAME
+            
+            # Find universalizer script
+            universalizer_script = root_dir / "build" / "universalizer_patched.py"
+            
+            # Merge the architectures
+            if not merge_architectures(arch1_app, arch2_app, universal_app_path, universalizer_script):
+                raise RuntimeError("Failed to merge architectures into universal binary")
+            
+            if slack_notifications:
+                notify_build_step("Completed merging architectures into universal binary")
+
             if sign_flag:
                 sign_universal(built_contexts)
                 if slack_notifications:

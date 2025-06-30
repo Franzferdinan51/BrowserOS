@@ -2,7 +2,7 @@
 build:
   type: release
   # architecture: arm64  # Default single architecture
-  architectures: [x86_64, arm64] # List for multi-architecture builds
+  architectures: [x64, arm64] # List for multi-architecture builds
   universal: true # Create universal binary from multiple architectures
 
 gn_flags:
@@ -13,7 +13,7 @@ steps:
   git_setup: true
   apply_patches: true
   build: true
-  sign: true
+  sign: false
   package: true
 
 paths:

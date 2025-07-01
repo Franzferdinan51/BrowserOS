@@ -9,6 +9,24 @@
 
     <!-- Updates -->
     <item>
+      <title>Nxtscape - 0.8.0</title>
+      <description sparkle:format="plain-text">
+- NEW FEATURE: Sidekick LLM. Brings third party LLMs to side panel.
+  - Quickly toggle between ChatGPT, Claude, Gemini, Perplexity, and Ollama
+  - Supports easy copy of web page content to paste in LLM
+      </description>
+      <sparkle:version>7172.69</sparkle:version>
+      <sparkle:shortVersionString>0.8.0</sparkle:shortVersionString>
+      <pubDate>Tue, 01 Jul 2025 15:52:43 -0700</pubDate>
+      <link>https://nxtscape.ai</link>
+      <enclosure
+        url="http://cdn.browseros.com/dmg/v0.8.0-arm64.dmg"
+        sparkle:edSignature="zXhY8QNr5hCbJb/Occp/n0nMbrUdSJZRKaWTDpshf//MtR34kCW0bv9B7/blKKOXZCmL+EOJERV+MxA+uKurBw=="
+        length="126824685"
+        type="application/octet-stream" />
+      <sparkle:minimumSystemVersion>10.15</sparkle:minimumSystemVersion>
+    </item>
+    <item>
       <title>Nxtscape - 0.7.0</title>
       <description sparkle:format="plain-text">
 - Improved agent to allow interruptions

@@ -228,3 +228,71 @@ def merge_sign_package(
     log_info("=" * 70)
     
     return True
+
+
+def handle_merge_command(
+    arch1_path: Path,
+    arch2_path: Path,
+    chromium_src: Path,
+    sign: bool = False,
+    package: bool = False
+) -> bool:
+    """
+    Handle the merge command from CLI
+    
+    Args:
+        arch1_path: Path to first architecture .app bundle
+        arch2_path: Path to second architecture .app bundle
+        chromium_src: Path to chromium source directory
+        sign: Whether to sign the universal binary
+        package: Whether to create DMG package
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    log_info("🔄 Running merge command...")
+    log_info(f"  Arch 1: {arch1_path}")
+    log_info(f"  Arch 2: {arch2_path}")
+    log_info(f"  Sign: {sign}")
+    log_info(f"  Package: {package}")
+    log_info(f"📁 Using Chromium source: {chromium_src}")
+    
+    # Validate input paths exist
+    if not arch1_path.exists():
+        log_error(f"Architecture 1 app not found: {arch1_path}")
+        return False
+    
+    if not arch2_path.exists():
+        log_error(f"Architecture 2 app not found: {arch2_path}")
+        return False
+    
+    # Get root_dir from where this module is located
+    root_dir = Path(__file__).parent.parent.parent
+    log_info(f"📂 Using root directory: {root_dir}")
+    
+    # Auto-generate output path in chromium source
+    output_path = chromium_src / "out" / "Default_universal" / "Nxtscape.app"
+    log_info(f"  Output: {output_path} (auto-generated)")
+    
+    try:
+        success = merge_sign_package(
+            arch1_path=arch1_path,
+            arch2_path=arch2_path,
+            output_path=output_path,
+            chromium_src=chromium_src,
+            root_dir=root_dir,
+            sign=sign,
+            package=package,
+        )
+        
+        if success:
+            log_success("Merge command completed successfully!")
+        else:
+            log_error("Merge command failed!")
+        
+        return success
+    except Exception as e:
+        log_error(f"Merge command failed with exception: {e}")
+        import traceback
+        traceback.print_exc()
+        return False

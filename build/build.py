@@ -18,6 +18,7 @@ from modules.clean import clean
 from modules.git import setup_git, setup_sparkle
 from modules.patches import apply_patches
 from modules.resources import copy_resources
+from modules.chromium_replace import replace_chromium_files, add_file_to_replacements
 from modules.configure import configure
 from modules.compile import build
 from modules.sign import sign, sign_universal
@@ -37,6 +38,7 @@ def build_main(
     clean_flag: bool = False,
     git_setup_flag: bool = False,
     apply_patches_flag: bool = False,
+    chromium_replace_flag: bool = False,
     sign_flag: bool = False,
     package_flag: bool = False,
     build_flag: bool = False,
@@ -79,6 +81,7 @@ def build_main(
             apply_patches_flag = config["steps"].get(
                 "apply_patches", apply_patches_flag
             )
+            chromium_replace_flag = config["steps"].get("chromium_replace", chromium_replace_flag)
             build_flag = config["steps"].get("build", build_flag)
             sign_flag = config["steps"].get("sign", sign_flag)
             package_flag = config["steps"].get("package", package_flag)
@@ -182,6 +185,12 @@ def build_main(
                     notify_build_step(
                         "Completed applying patches and copying resources"
                     )
+
+            # Replace chromium files (only once for first architecture)
+            if chromium_replace_flag and arch_name == architectures[0]:
+                replace_chromium_files(ctx)
+                if slack_notifications:
+                    notify_build_step("Completed replacing chromium files")
 
             # Build for this architecture
             if build_flag:
@@ -312,6 +321,9 @@ def build_main(
     "--apply-patches", "-p", is_flag=True, default=False, help="Apply patches"
 )
 @click.option(
+    "--chromium-replace", "-r", is_flag=True, default=False, help="Replace chromium files"
+)
+@click.option(
     "--sign", "-s", is_flag=True, default=False, help="Sign and notarize the app"
 )
 @click.option(
@@ -350,11 +362,17 @@ def build_main(
     metavar="ARCH1_APP ARCH2_APP",
     help="Merge two architecture builds: --merge path/to/arch1.app path/to/arch2.app",
 )
+@click.option(
+    "--add-replace",
+    type=click.Path(exists=True, path_type=Path),
+    help="Add a file to chromium_src replacement directory: --add-replace /path/to/chromium/src/file --chromium-src /path/to/chromium/src",
+)
 def main(
     config,
     clean,
     git_setup,
     apply_patches,
+    chromium_replace,
     sign,
     arch,
     build_type,
@@ -363,76 +381,53 @@ def main(
     chromium_src,
     slack_notifications,
     merge,
+    add_replace,
 ):
     """Simple build system for Nxtscape Browser"""
 
-    # Handle merge command
-    if merge:
-        from modules.merge import merge_sign_package
-
-        arch1_path, arch2_path = merge
-        log_info("🔄 Running merge command...")
-        log_info(f"  Arch 1: {arch1_path}")
-        log_info(f"  Arch 2: {arch2_path}")
-        log_info(f"  Sign: {sign}")
-        log_info(f"  Package: {package}")
-
-        # Enforce chromium-src path requirement for merge operations
+    # Validate chromium-src for commands that need it
+    if add_replace or merge or (not config and chromium_src is None):
         if not chromium_src:
-            log_error("Merge command requires --chromium-src to be specified")
-            log_error(
-                "Example: python build.py --merge app1.app app2.app --chromium-src /path/to/chromium/src"
-            )
+            if add_replace:
+                log_error("--add-replace requires --chromium-src to be specified")
+                log_error(
+                    "Example: python build.py --add-replace /path/to/chromium/src/chrome/file.cc --chromium-src /path/to/chromium/src"
+                )
+            elif merge:
+                log_error("--merge requires --chromium-src to be specified")
+                log_error(
+                    "Example: python build.py --merge app1.app app2.app --chromium-src /path/to/chromium/src"
+                )
+            else:
+                log_error("--chromium-src is required when not using a config file")
+                log_error("Example: python build.py --chromium-src /path/to/chromium/src")
             sys.exit(1)
 
         # Validate chromium_src path exists
         if not chromium_src.exists():
             log_error(f"Chromium source directory does not exist: {chromium_src}")
-            log_error("Please provide a valid --chromium-src path")
             sys.exit(1)
 
-        chromium_src_path = chromium_src
-        log_info(f"📁 Using Chromium source: {chromium_src_path}")
-
-        # Validate input paths exist
-        if not arch1_path.exists():
-            log_error(f"Architecture 1 app not found: {arch1_path}")
-            sys.exit(1)
-
-        if not arch2_path.exists():
-            log_error(f"Architecture 2 app not found: {arch2_path}")
-            sys.exit(1)
-
-        # Get root_dir from where the build.py is being run
+    # Handle add-replace command
+    if add_replace:
+        # Get root directory
         root_dir = Path(__file__).parent.parent
-        log_info(f"📂 Using root directory: {root_dir}")
+        
+        # Call the function from chromium_replace module
+        if add_file_to_replacements(add_replace, chromium_src, root_dir):
+            sys.exit(0)
+        else:
+            sys.exit(1)
 
-        # Auto-generate output path in chromium source
-        output_path = chromium_src_path / "out" / "Default_universal" / "Nxtscape.app"
-        log_info(f"  Output: {output_path} (auto-generated)")
+    # Handle merge command
+    if merge:
+        from modules.merge import handle_merge_command
 
-        try:
-            success = merge_sign_package(
-                arch1_path=arch1_path,
-                arch2_path=arch2_path,
-                output_path=output_path,
-                chromium_src=chromium_src_path,
-                root_dir=root_dir,
-                sign=sign,
-                package=package,
-            )
-
-            if success:
-                log_success("Merge command completed successfully!")
-                sys.exit(0)
-            else:
-                log_error("Merge command failed!")
-                sys.exit(1)
-        except Exception as e:
-            log_error(f"Merge command failed with exception: {e}")
-            import traceback
-
-            traceback.print_exc()
+        arch1_path, arch2_path = merge
+        
+        if handle_merge_command(arch1_path, arch2_path, chromium_src, sign, package):
+            sys.exit(0)
+        else:
             sys.exit(1)
 
     # Regular build workflow
@@ -441,6 +436,7 @@ def main(
         clean_flag=clean,
         git_setup_flag=git_setup,
         apply_patches_flag=apply_patches,
+        chromium_replace_flag=chromium_replace,
         sign_flag=sign,
         package_flag=package,
         build_flag=build,

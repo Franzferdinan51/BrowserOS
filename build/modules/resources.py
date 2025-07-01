@@ -9,7 +9,7 @@ import shutil
 import yaml
 from pathlib import Path
 from context import BuildContext
-from utils import log_info, log_success, log_error
+from utils import log_info, log_success, log_error, log_warning
 
 
 def copy_resources(ctx: BuildContext) -> bool:

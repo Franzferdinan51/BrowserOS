@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Application signing and notarization module for Nxtscape Browser
+Application signing and notarization module for BrowserOS
 """
 
 import os
@@ -11,7 +11,13 @@ import shutil
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
 from context import BuildContext
-from utils import run_command as utils_run_command, log_info, log_error, log_success
+from utils import (
+    run_command as utils_run_command,
+    log_info,
+    log_error,
+    log_success,
+    log_warning,
+)
 
 
 def run_command(
@@ -82,14 +88,14 @@ def find_components_to_sign(
 
     framework_path = app_path / "Contents" / "Frameworks"
 
-    # Check both versioned and non-versioned paths for Nxtscape Framework
-    nxtscape_framework_paths = [framework_path / "Nxtscape Framework.framework"]
+    # Check both versioned and non-versioned paths for BrowserOS Framework
+    nxtscape_framework_paths = [framework_path / "BrowserOS Framework.framework"]
 
     # Add versioned path if context is available
     if ctx and ctx.nxtscape_chromium_version:
         versioned_path = (
             framework_path
-            / "Nxtscape Framework.framework"
+            / "BrowserOS Framework.framework"
             / "Versions"
             / ctx.nxtscape_chromium_version
         )
@@ -128,7 +134,7 @@ def find_components_to_sign(
                 if autoupdate.exists() and autoupdate.is_file():
                     components["executables"].append(autoupdate)
 
-    # Find all dylibs (check versioned path for Nxtscape Framework libraries)
+    # Find all dylibs (check versioned path for BrowserOS Framework libraries)
     for nxtscape_fw_path in nxtscape_framework_paths:
         libraries_dir = nxtscape_fw_path / "Libraries"
         if libraries_dir.exists():
@@ -148,7 +154,7 @@ def find_components_to_sign(
 
 
 def get_identifier_for_component(
-    component_path: Path, base_identifier: str = "org.nxtscape"
+    component_path: Path, base_identifier: str = "com.browseros"
 ) -> str:
     """Generate identifier for a component based on its path and name"""
     name = component_path.stem
@@ -181,7 +187,7 @@ def get_identifier_for_component(
 
     # For frameworks
     if component_path.suffix == ".framework":
-        if name == "Nxtscape Framework":
+        if name == "BrowserOS Framework":
             return f"{base_identifier}.framework"
         else:
             return f"{base_identifier}.{name.replace(' ', '_').lower()}"
@@ -330,10 +336,10 @@ def sign_all_components(
             ):
                 return False
 
-    # 6. Sign frameworks (except the main Nxtscape Framework)
+    # 6. Sign frameworks (except the main BrowserOS Framework)
     if components["frameworks"]:
         log_info("\n🔏 Signing frameworks...")
-        # Sort to sign Sparkle.framework before Nxtscape Framework.framework
+        # Sort to sign Sparkle.framework before BrowserOS Framework.framework
         frameworks_sorted = sorted(
             components["frameworks"], key=lambda x: 0 if "Sparkle" in x.name else 1
         )
@@ -344,14 +350,14 @@ def sign_all_components(
 
     # 7. Sign main executable
     log_info("\n🔏 Signing main executable...")
-    main_exe = app_path / "Contents" / "MacOS" / "Nxtscape"
-    if not sign_component(main_exe, certificate_name, "org.nxtscape.Nxtscape"):
+    main_exe = app_path / "Contents" / "MacOS" / "BrowserOS"
+    if not sign_component(main_exe, certificate_name, "com.browseros.BrowserOS"):
         return False
 
     # 8. Finally sign the app bundle
     log_info("\n🔏 Signing application bundle...")
     requirements = (
-        '=designated => identifier "org.nxtscape.Nxtscape" and '
+        '=designated => identifier "com.browseros.BrowserOS" and '
         "anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and "
         "certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */"
     )
@@ -390,7 +396,7 @@ def sign_all_components(
         "--force",
         "--timestamp",
         "--identifier",
-        "org.nxtscape.Nxtscape",
+        "com.browseros.BrowserOS",
         "--options",
         "restrict,library,runtime,kill",
         "--requirements",
@@ -539,7 +545,7 @@ def notarize_app(
 def sign_app(ctx: BuildContext, create_dmg: bool = True) -> bool:
     """Main signing function that uses BuildContext from build.py"""
     log_info("=" * 70)
-    log_info("🚀 Starting signing process for Nxtscape...")
+    log_info("🚀 Starting signing process for BrowserOS...")
     log_info("=" * 70)
 
     # Error tracking similar to bash script
@@ -607,7 +613,7 @@ def sign_app(ctx: BuildContext, create_dmg: bool = True) -> bool:
                 app_path=app_path,
                 dmg_path=dmg_path,
                 certificate_name=env_vars["certificate_name"],
-                volume_name="Nxtscape",
+                volume_name="BrowserOS",
                 pkg_dmg_path=pkg_dmg_path,
                 keychain_profile="notarytool-profile",
             ):
@@ -645,11 +651,11 @@ def sign_universal(contexts: List[BuildContext]) -> bool:
     log_info("=" * 70)
     log_info("🔄 Creating and signing universal binary...")
     log_info("=" * 70)
-    
+
     if len(contexts) < 2:
         log_error("Universal build requires at least 2 architectures")
         return False
-    
+
     # Verify all app builds exist
     app_paths = []
     for ctx in contexts:
@@ -659,38 +665,38 @@ def sign_universal(contexts: List[BuildContext]) -> bool:
             return False
         app_paths.append(app_path)
         log_info(f"✓ Found {ctx.architecture} build: {app_path}")
-    
+
     # Create universal output directory
     universal_dir = contexts[0].chromium_src / "out/Default_universal"
     universal_app_path = universal_dir / contexts[0].NXTSCAPE_APP_NAME
-    
+
     if universal_dir.exists():
         log_info("Removing existing universal directory...")
         shutil.rmtree(universal_dir)
-    
+
     universal_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Use universalizer script to merge architectures
     universalizer_script = contexts[0].root_dir / "build" / "universalizer_patched.py"
-    
+
     if not universalizer_script.exists():
         log_error(f"Universalizer script not found: {universalizer_script}")
         return False
-    
+
     try:
         cmd = [
             sys.executable,
             str(universalizer_script),
             *[str(app_path) for app_path in app_paths],
-            str(universal_app_path)
+            str(universal_app_path),
         ]
-        
+
         log_info(f"Running universalizer...")
         log_info(f"Command: {' '.join(cmd)}")
         run_command(cmd)
-        
+
         log_success(f"Universal binary created: {universal_app_path}")
-        
+
         # Create a temporary context for universal signing
         universal_ctx = BuildContext(
             root_dir=contexts[0].root_dir,
@@ -704,12 +710,12 @@ def sign_universal(contexts: List[BuildContext]) -> bool:
         )
         # Override out_dir for universal
         universal_ctx.out_dir = "out/Default_universal"
-        
+
         # Sign the universal binary
         if not sign_app(universal_ctx, create_dmg=False):
             log_error("Failed to sign universal binary")
             return False
-            
+
         log_success("Universal binary signed successfully!")
         return True
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DMG creation and packaging module for Nxtscape Browser
+DMG creation and packaging module for BrowserOS
 """
 
 import sys
@@ -27,7 +27,7 @@ def package(ctx: BuildContext) -> bool:
     # Use Chromium's pkg-dmg tool
     pkg_dmg_path = ctx.get_pkg_dmg_path()
     
-    if create_dmg(app_path, dmg_path, "Nxtscape", pkg_dmg_path):
+    if create_dmg(app_path, dmg_path, "BrowserOS", pkg_dmg_path):
         log_success(f"Created {dmg_name}")
         return True
     else:
@@ -35,7 +35,7 @@ def package(ctx: BuildContext) -> bool:
         raise RuntimeError("Failed to create DMG")
 
 
-def create_dmg(app_path: Path, dmg_path: Path, volume_name: str = "Nxtscape",
+def create_dmg(app_path: Path, dmg_path: Path, volume_name: str = "BrowserOS",
                pkg_dmg_path: Optional[Path] = None) -> bool:
     """Create a DMG package from an app bundle"""
     log_info(f"\n📀 Creating DMG package: {dmg_path.name}")
@@ -201,7 +201,7 @@ def notarize_dmg(dmg_path: Path, keychain_profile: str = "notarytool-profile") -
 
 def create_signed_notarized_dmg(app_path: Path, dmg_path: Path, 
                                certificate_name: str,
-                               volume_name: str = "Nxtscape",
+                               volume_name: str = "BrowserOS",
                                pkg_dmg_path: Optional[Path] = None,
                                keychain_profile: str = "notarytool-profile") -> bool:
     """Create, sign, and notarize a DMG in one go"""
@@ -269,7 +269,7 @@ def package_universal(contexts: List[BuildContext]) -> bool:
     pkg_dmg_path = contexts[0].get_pkg_dmg_path()
     
     # Create the universal DMG
-    if create_dmg(universal_app_path, dmg_path, "Nxtscape", pkg_dmg_path):
+    if create_dmg(universal_app_path, dmg_path, "BrowserOS", pkg_dmg_path):
         log_success(f"Universal DMG created: {dmg_name}")
         return True
     else:

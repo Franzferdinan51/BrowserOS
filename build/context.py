@@ -30,7 +30,7 @@ class BuildContext:
 
     # App names
     CHROMIUM_APP_NAME: str = "Chromium.app"
-    NXTSCAPE_APP_NAME: str = "Nxtscape.app"
+    NXTSCAPE_APP_NAME: str = "BrowserOS.app"
 
     # Third party
     SPARKLE_VERSION: str = "2.7.0"
@@ -171,12 +171,12 @@ class BuildContext:
         """Get DMG filename with architecture suffix"""
         if self.architecture == "universal":
             if signed:
-                return f"Nxtscape_{self.nxtscape_chromium_version}_universal_signed.dmg"
-            return f"Nxtscape_{self.nxtscape_chromium_version}_universal.dmg"
+                return f"BrowserOS_{self.nxtscape_chromium_version}_universal_signed.dmg"
+            return f"BrowserOS_{self.nxtscape_chromium_version}_universal.dmg"
         else:
             if signed:
-                return f"Nxtscape_{self.nxtscape_chromium_version}_{self.architecture}_signed.dmg"
-            return f"Nxtscape_{self.nxtscape_chromium_version}_{self.architecture}.dmg"
+                return f"BrowserOS_{self.nxtscape_chromium_version}_{self.architecture}_signed.dmg"
+            return f"BrowserOS_{self.nxtscape_chromium_version}_{self.architecture}.dmg"
 
     # Extension names
     def get_ai_extensions(self) -> list[str]:
@@ -186,8 +186,8 @@ class BuildContext:
     # Bundle identifiers
     def get_bundle_identifier(self) -> str:
         """Get main bundle identifier"""
-        return "org.nxtscape.Nxtscape"
+        return "com.browseros.BrowserOS"
 
     def get_base_identifier(self) -> str:
         """Get base identifier for components"""
-        return "org.nxtscape"
+        return "com.browseros"

@@ -1,0 +1,111 @@
+From 7b588a5687a2a871378d80c13e80edb318b4c3be Mon Sep 17 00:00:00 2001
+From: Nikhil Sonti <nikhilsv92@gmail.com>
+Date: Tue, 1 Jul 2025 18:10:00 -0700
+Subject: [PATCH] bug reporter extension
+
+---
+ chrome/browser/browser_resources.grd                   |  1 +
+ .../component_extensions_allowlist/allowlist.cc        |  2 ++
+ chrome/browser/extensions/component_loader.cc          |  3 +++
+ chrome/browser/resources/BUILD.gn                      |  1 +
+ .../resources/component_extension_resources.grd        | 10 ++++++++++
+ chrome/common/extensions/extension_constants.h         |  4 ++++
+ 6 files changed, 21 insertions(+)
+
+diff --git a/chrome/browser/browser_resources.grd b/chrome/browser/browser_resources.grd
+index 80f296feed297..80eb79f78d743 100644
+--- a/chrome/browser/browser_resources.grd
++++ b/chrome/browser/browser_resources.grd
+@@ -239,6 +239,7 @@
+         <include name="IDR_CERT_MANAGER_DIALOG_V2_HTML" file="resources\certificate_manager\certificate_manager_dialog_v2.html" type="BINDATA" />
+       </if>
+       <include name="IDR_AI_SIDE_PANEL_MANIFEST" file="resources\ai_side_panel\manifest.json" type="BINDATA" />
++      <include name="IDR_BUG_REPORTER_MANIFEST" file="resources\bug_reporter\manifest.json" type="BINDATA" />
+     </includes>
+   </release>
+ </grit>
+diff --git a/chrome/browser/extensions/component_extensions_allowlist/allowlist.cc b/chrome/browser/extensions/component_extensions_allowlist/allowlist.cc
+index b2e9219008a54..c3831b5b78f7a 100644
+--- a/chrome/browser/extensions/component_extensions_allowlist/allowlist.cc
++++ b/chrome/browser/extensions/component_extensions_allowlist/allowlist.cc
+@@ -32,6 +32,7 @@ bool IsComponentExtensionAllowlisted(const std::string& extension_id) {
+       extension_misc::kInAppPaymentsSupportAppId,
+       extension_misc::kPdfExtensionId,
+       extension_misc::kAISidePanelExtensionId,
++      extension_misc::kBugReporterExtensionId,
+ #if BUILDFLAG(IS_CHROMEOS)
+       extension_misc::kAssessmentAssistantExtensionId,
+       extension_misc::kAccessibilityCommonExtensionId,
+@@ -91,6 +92,7 @@ bool IsComponentExtensionAllowlisted(int manifest_resource_id) {
+ #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
+     case IDR_WEBSTORE_MANIFEST:
+     case IDR_AI_SIDE_PANEL_MANIFEST:  // AI Side Panel Extension
++    case IDR_BUG_REPORTER_MANIFEST:  // Bug Reporter Extension
+ 
+ #if BUILDFLAG(IS_CHROMEOS)
+     // Separate ChromeOS list, as it is quite large.
+diff --git a/chrome/browser/extensions/component_loader.cc b/chrome/browser/extensions/component_loader.cc
+index 12ba5765f1cd3..732ba2586334e 100644
+--- a/chrome/browser/extensions/component_loader.cc
++++ b/chrome/browser/extensions/component_loader.cc
+@@ -546,6 +546,9 @@ void ComponentLoader::AddDefaultComponentExtensionsWithBackgroundPages(
+   Add(IDR_AI_SIDE_PANEL_MANIFEST,
+       base::FilePath(FILE_PATH_LITERAL("ai_side_panel")));
+ 
++  Add(IDR_BUG_REPORTER_MANIFEST,
++      base::FilePath(FILE_PATH_LITERAL("bug_reporter")));
++
+ #if BUILDFLAG(ENABLE_HANGOUT_SERVICES_EXTENSION)
+   const bool enable_hangout_services_extension_for_testing =
+       command_line->HasSwitch(::switches::kTestType) &&
+diff --git a/chrome/browser/resources/BUILD.gn b/chrome/browser/resources/BUILD.gn
+index b479c135ceffe..31fbc653ac5c5 100644
+--- a/chrome/browser/resources/BUILD.gn
++++ b/chrome/browser/resources/BUILD.gn
+@@ -20,6 +20,7 @@ group("resources") {
+     "saved_tab_groups_unsupported:resources",
+     "segmentation_internals:resources",
+     "ai_side_panel:build",
++    "bug_reporter:build",
+   ]
+ 
+   if (!is_android) {
+diff --git a/chrome/browser/resources/component_extension_resources.grd b/chrome/browser/resources/component_extension_resources.grd
+index d0d2bf499ee62..18f612b1ea959 100644
+--- a/chrome/browser/resources/component_extension_resources.grd
++++ b/chrome/browser/resources/component_extension_resources.grd
+@@ -24,6 +24,16 @@
+     <include name="IDR_AI_SIDE_PANEL_ICON48" file="ai_side_panel/assets/icon48.png" type="BINDATA" />
+     <include name="IDR_AI_SIDE_PANEL_ICON128" file="ai_side_panel/assets/icon128.png" type="BINDATA" />
+ 
++    <!-- Bug Reporter Extension -->
++    <include name="IDR_BUG_REPORTER_MANIFEST" file="bug_reporter/manifest.json" type="BINDATA" />
++    <include name="IDR_BUG_REPORTER_BACKGROUND_JS" file="bug_reporter/background.js" type="BINDATA" />
++    <include name="IDR_BUG_REPORTER_CONTENT_JS" file="bug_reporter/content.js" type="BINDATA" />
++    <include name="IDR_BUG_REPORTER_POPUP_HTML" file="bug_reporter/popup.html" type="BINDATA" />
++    <include name="IDR_BUG_REPORTER_POPUP_JS" file="bug_reporter/popup.js" type="BINDATA" />
++    <include name="IDR_BUG_REPORTER_ICON16" file="bug_reporter/assets/icon16.png" type="BINDATA" />
++    <include name="IDR_BUG_REPORTER_ICON48" file="bug_reporter/assets/icon48.png" type="BINDATA" />
++    <include name="IDR_BUG_REPORTER_ICON128" file="bug_reporter/assets/icon128.png" type="BINDATA" />
++
+      <include name="IDR_NETWORK_SPEECH_SYNTHESIS_JS" file="network_speech_synthesis/tts_extension.js" type="BINDATA" />
+ 
+       <include name="IDR_NETWORK_SPEECH_SYNTHESIS_MV3_AUDIO_HTML" file="network_speech_synthesis/mv3/audio.html" type="BINDATA" />
+diff --git a/chrome/common/extensions/extension_constants.h b/chrome/common/extensions/extension_constants.h
+index b73ab6259a19d..c650b045144bb 100644
+--- a/chrome/common/extensions/extension_constants.h
++++ b/chrome/common/extensions/extension_constants.h
+@@ -31,6 +31,10 @@ namespace extension_misc {
+ inline constexpr char kAISidePanelExtensionId[] =
+     "opocihnfjcgcjecjhjjgifkbkgeeoonh";
+ 
++// The extension id of the Bug Reporter extension.
++inline constexpr char kBugReporterExtensionId[] =
++    "jpajdgphofjhblkgpbemoelbnbinnpje";
++
+ // The extension id of the Calendar application.
+ inline constexpr char kCalendarAppId[] = "ejjicmeblgpmajnghnpcppodonldlgfn";
+ 
+-- 
+2.49.0
+

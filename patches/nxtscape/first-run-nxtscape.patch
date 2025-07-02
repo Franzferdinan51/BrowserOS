@@ -164,7 +164,7 @@ index 0000000000000..3c2a0cbaffed5
 + <details>
 +  <summary><b>🔑 BYOK (Bring Your Own Keys)</b></summary>
 +  <p style="padding: 1em 2em;">
-+   You have full control over your AI models! Navigate to <a href="chrome://settings/nxtscape"><code>chrome://settings/nxtscape</code></a> to configure your own API keys for various providers.
++   You have full control over your AI models! Navigate to <a href="chrome://settings/browseros"><code>chrome://settings/browseros</code></a> to configure your own API keys for various providers.
 +  </p>
 +  <p style="padding: 0.5em 2em 1em 2em;">
 +   <strong>Note:</strong> You can even run everything locally using <a href="https://ollama.com">Ollama</a>! 🔒

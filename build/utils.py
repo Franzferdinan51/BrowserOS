@@ -7,6 +7,7 @@ import os
 import sys
 import subprocess
 import yaml
+import shutil
 from pathlib import Path
 from typing import Optional, List, Dict, Union
 from datetime import datetime
@@ -97,16 +98,26 @@ def run_command(
     log_info(f"🔧 Running: {cmd_str}")
 
     try:
+        # On Windows, we need to handle executable resolution
+        executable_cmd = cmd.copy()
+        if IS_WINDOWS:
+            # Try to find the full path to the executable
+            full_path = shutil.which(cmd[0])
+            if full_path:
+                executable_cmd[0] = full_path
+                log_info(f"Found executable at: {full_path}")
+            
         # Always use Popen for real-time streaming and capturing
         process = subprocess.Popen(
-            cmd,
+            executable_cmd,
             cwd=cwd,
             env=env or os.environ,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,  # Merge stderr into stdout
             text=True,
             bufsize=1,
-            universal_newlines=True
+            universal_newlines=True,
+            shell=False  # Explicitly set shell=False for security
         )
         
         stdout_lines = []
@@ -162,6 +173,10 @@ def run_command(
         if check:
             log_error(f"Unexpected error running command: {cmd_str}")
             log_error(f"Error: {str(e)}")
+            log_error(f"Error type: {type(e).__name__}")
+            if cwd:
+                log_error(f"Working directory: {cwd}")
+                log_error(f"Directory exists: {Path(cwd).exists() if cwd else 'N/A'}")
         raise
 
 

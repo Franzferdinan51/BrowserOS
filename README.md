@@ -1,8 +1,8 @@
 <div align="center">
 
 # 
-<img src="https://storage.googleapis.com/nxtscape/resources/new-nxtscape-banner.png" alt="backed-by-yc" >
-(previously, Nxtscape)**
+<img src="https://cdn.browseros.com/resources/banner.png" alt="backed-by-yc" >
+<strong>(previously Nxtscape)</strong>
 
 ### Your browser, with AI superpowers 🚀
 
@@ -18,7 +18,7 @@
 
 </div>
 
-🌐 NXTscape ("next-scape") is an open-source agentic browser that runs AI agents locally. Your privacy-first alternative to Arc, Dia, and Perplexity Comet.
+🌐 BrowserOS is an open-source agentic browser that runs AI agents locally. Your privacy-first alternative to Arc, Dia, and Perplexity Comet.
 
 🔒 Privacy first - use your own API keys or run local models with Ollama. Your data stays on your computer.
 
@@ -26,12 +26,12 @@
 
 ## Quick start
 
-1. [Download and install NXTscape](https://bit.ly/4k0gjsD)
+1. [Download and install BrowserOS](https://bit.ly/4k0gjsD)
 2. Import your Chrome data (optional)
 3. Connect your AI provider (OpenAI, Anthropic, or local Ollama)
 4. Start automating!
 
-## What makes NXTscape special
+## What makes BrowserOS special
 
 <div align="center">
 <img src="resources/media/example-use-cases.png" alt="example-use-cases" width="85%">
@@ -99,7 +99,7 @@ They're a search/ad company. Your browser history becomes their product. We keep
 
 ## Contributing
 
-We'd love your help making NXTscape better!
+We'd love your help making BrowserOS better!
 
 - 🐛 [Report bugs](https://github.com/nxtscape/nxtscape/issues)
 - 💡 [Suggest features](https://dub.sh/nxtscape-feature-request)
@@ -108,10 +108,10 @@ We'd love your help making NXTscape better!
 
 ## License
 
-NXTscape is open source under the [AGPL-3.0 license](LICENSE).
+BrowserOS is open source under the [AGPL-3.0 license](LICENSE).
 
 ---
 
 <p align="center">
-Built with ❤️ by the NXTscape team. Inspired by <a href="https://github.com/browser-use/browser-use">browser-use</a>, <a href="https://github.com/browserbase/stagehand">Stagehand</a>, <a href="https://github.com/nanobrowser/nanobrowser">Nanobrowser</a> and of course only possible because of <a href="https://github.com/chromium/chromium">Chromium</a>.
+Built with ❤️ from San Francisco. Inspired by <a href="https://github.com/browser-use/browser-use">browser-use</a>, <a href="https://github.com/browserbase/stagehand">Stagehand</a>, <a href="https://github.com/nanobrowser/nanobrowser">Nanobrowser</a> and of course only possible because of <a href="https://github.com/chromium/chromium">Chromium</a>.
 </p>

@@ -67,42 +67,41 @@ def create_installer(ctx: BuildContext) -> bool:
 
 
 def create_portable_zip(ctx: BuildContext) -> bool:
-    """Create portable ZIP package for Windows"""
-    log_info("\n📦 Creating portable ZIP package...")
+    """Create ZIP of just the installer for easier distribution"""
+    log_info("\n📦 Creating installer ZIP package...")
     
     # Get paths
     build_output_dir = join_paths(ctx.chromium_src, ctx.out_dir)
+    mini_installer_path = build_output_dir / "mini_installer.exe"
+    
+    if not mini_installer_path.exists():
+        log_warning(f"mini_installer.exe not found at: {mini_installer_path}")
+        log_info("To build the installer, run: autoninja -C out\\Default_x64 mini_installer")
+        return False
     
     # Create output directory
     output_dir = ctx.root_dir / "dist"
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Generate ZIP filename with version and architecture
-    zip_name = f"{ctx.get_app_base_name()}_{ctx.get_nxtscape_version()}_{ctx.architecture}_windows.zip"
+    zip_name = f"{ctx.get_app_base_name()}_{ctx.get_nxtscape_version()}_{ctx.architecture}_installer.zip"
     zip_path = output_dir / zip_name
     
-    # Files to exclude from the ZIP (installer-specific files)
-    excluded_files = {
-        "mini_installer.exe",
-        "mini_installer_exe_version.rc",
-        "setup.exe",
-        "chrome.packed.7z",
-    }
-    
-    # Create ZIP file
+    # Create ZIP file containing just the installer
     try:
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            # Add all files from build output, excluding specific files
-            for file_path in build_output_dir.rglob('*'):
-                if file_path.is_file() and file_path.name not in excluded_files:
-                    # Calculate relative path for archive
-                    arcname = file_path.relative_to(build_output_dir)
-                    zipf.write(file_path, arcname)
+            # Add mini_installer.exe to the zip
+            installer_name = f"{ctx.get_app_base_name()}_{ctx.get_nxtscape_version()}_{ctx.architecture}_installer.exe"
+            zipf.write(mini_installer_path, installer_name)
+            
+            # Get file size for logging
+            file_size = mini_installer_path.stat().st_size
+            log_info(f"Added installer to ZIP ({file_size // (1024*1024)} MB)")
                     
-        log_success(f"Portable ZIP created: {zip_name}")
+        log_success(f"Installer ZIP created: {zip_name}")
         return True
     except Exception as e:
-        log_error(f"Failed to create portable ZIP: {e}")
+        log_error(f"Failed to create installer ZIP: {e}")
         return False
 
 

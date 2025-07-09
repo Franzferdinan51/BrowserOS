@@ -59,6 +59,5 @@
     "48": "assets/icon48.png",
     "128": "assets/icon128.png"
   },
-  "component": true,
-  "browser_version": "137.0.7178.69"
+  "component": true
 }

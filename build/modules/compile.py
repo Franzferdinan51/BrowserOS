@@ -9,7 +9,7 @@ import shutil
 import multiprocessing
 from pathlib import Path
 from context import BuildContext
-from utils import run_command, log_info, log_success, log_warning, join_paths, IS_WINDOWS
+from utils import run_command, log_info, log_success, log_warning, join_paths, IS_WINDOWS, IS_MACOS
 
 
 def build(ctx: BuildContext) -> bool:
@@ -44,10 +44,14 @@ def build(ctx: BuildContext) -> bool:
     # Try to detect CPU cores and optimize parallel jobs
     autoninja_cmd = "autoninja.bat" if IS_WINDOWS else "autoninja"
     try:
-        cpu_count = multiprocessing.cpu_count()
-        parallel_jobs = cpu_count
-        log_info(f"🖥️  Detected {cpu_count} CPU cores, using {parallel_jobs} parallel jobs")
-        run_command([autoninja_cmd, f"-j{parallel_jobs}", "-C", ctx.out_dir, "chrome", "chromedriver"])
+        if IS_MACOS:
+            log_info("On macOS, using default autoninja parallelism")
+            run_command([autoninja_cmd, "-C", ctx.out_dir, "chrome", "chromedriver"])
+        else:
+            cpu_count = multiprocessing.cpu_count()
+            parallel_jobs = cpu_count
+            log_info(f"🖥️  Detected {cpu_count} CPU cores, using {parallel_jobs} parallel jobs")
+            run_command([autoninja_cmd, f"-j{parallel_jobs}", "-C", ctx.out_dir, "chrome", "chromedriver"])
     except Exception as e:
         log_warning(f"Could not optimize parallel jobs: {e}")
         log_info("Falling back to default autoninja settings")

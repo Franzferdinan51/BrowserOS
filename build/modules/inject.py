@@ -23,7 +23,7 @@ def inject_version(ctx: BuildContext) -> bool:
     
     success = True
     for manifest_path in manifest_paths:
-        if not inject_version_to_manifest(manifest_path, ctx.get_nxtscape_version(), ctx.get_nxtscape_version()):
+        if not inject_version_to_manifest(manifest_path, ctx.get_nxtscape_chromium_version(), ctx.get_nxtscape_version()):
             success = False
     
     if success:

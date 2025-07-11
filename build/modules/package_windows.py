@@ -108,7 +108,7 @@ def create_installer(ctx: BuildContext) -> bool:
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Generate installer filename with version and architecture
-    installer_name = f"{ctx.get_app_base_name()}_{ctx.get_nxtscape_version()}_{ctx.architecture}_installer.exe"
+    installer_name = f"{ctx.get_app_base_name()}_{ctx.get_nxtscape_chromium_version()}_{ctx.architecture}_installer.exe"
     installer_path = output_dir / installer_name
     
     # Copy mini_installer to final location
@@ -139,7 +139,7 @@ def create_portable_zip(ctx: BuildContext) -> bool:
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Generate ZIP filename with version and architecture
-    zip_name = f"{ctx.get_app_base_name()}_{ctx.get_nxtscape_version()}_{ctx.architecture}_installer.zip"
+    zip_name = f"{ctx.get_app_base_name()}_{ctx.get_nxtscape_chromium_version()}_{ctx.architecture}_installer.zip"
     zip_path = output_dir / zip_name
     
     # Create ZIP file containing just the installer

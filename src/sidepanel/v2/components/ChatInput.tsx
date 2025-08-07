@@ -133,7 +133,19 @@ export function ChatInput({ isConnected, isProcessing }: ChatInputProps) {
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value
     setInput(newValue)
-    setShowTabSelector(newValue.includes('@'))
+    // Only show selector when user just typed '@' starting a new token
+    const lastChar: string = newValue.slice(-1)
+    if (lastChar === '@' && !showTabSelector) {
+      const beforeAt: string = newValue.slice(0, -1)
+      if (beforeAt === '' || /\s$/.test(beforeAt)) {
+        setShowTabSelector(true)
+      }
+      return
+    }
+    // Hide selector when input cleared
+    if (newValue === '' && showTabSelector) {
+      setShowTabSelector(false)
+    }
   }
   
   const handleTabSelectorClose = () => {
@@ -176,11 +188,6 @@ export function ChatInput({ isConnected, isProcessing }: ChatInputProps) {
   return (
     <div className="relative bg-gradient-to-t from-background via-background to-background/95 p-2 flex-shrink-0 overflow-hidden">
       
-      {/* Spotlight effect from bottom of page */}
-      <div className="absolute top-20 left-0 w-full h-40">
-        <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-80 h-40 bg-gradient-radial from-brand/30 via-brand/15 to-transparent animate-spotlight-pulse"></div>
-        <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-64 h-32 bg-gradient-radial from-brand/25 via-brand/10 to-transparent animate-spotlight-pulse-delayed" style={{ animationDelay: '1.9s' }}></div>
-      </div>
       
       {/* Select Tabs Button (appears when '@' is present) */}
       

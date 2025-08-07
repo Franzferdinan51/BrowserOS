@@ -39,3 +39,22 @@
 3. Try some commands like:
    - "List all my tabs"
    - "Go to Google and search for TypeScript"
+
+### Switching LLM Providers (Optional)
+
+If you want to use a different LLM provider instead of LiteLLM, you can use the mock settings configuration:
+
+1. **Enable mock LLM settings**
+   - Open `src/config.ts`
+   - Set `MOCK_LLM_SETTINGS` to `true`
+
+2. **Configure your preferred provider**
+   - Open `src/lib/llm/settings/LLMSettingsReader.ts`
+   - Update `MOCK_PREFERENCES` with your preferred provider and API keys
+
+3. **Rebuild the extension**
+   ```bash
+   yarn build:dev
+   ```
+   
+> **Note:** This is useful for testing with different LLM providers or when you want to use your own API keys directly.

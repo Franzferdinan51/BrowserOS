@@ -111,7 +111,12 @@ export function MessageList({ messages, onScrollStateChange, scrollToBottom: ext
   const processedMessages = useMemo(() => {
     const todoTableMessages = messages.filter(msg => msg.content.includes('| # | Status | Task |'))
     const todoTableIds = new Set(todoTableMessages.map(msg => msg.id))
-    
+
+    const findPrevIndex = (pred: (m: Message) => boolean, start: number): number => {
+      for (let i = start; i >= 0; i--) if (pred(messages[i])) return i
+      return -1
+    }
+
     // Create a map of message positions for efficient lookup
     const messagePositions = new Map<string, {
       isTodoTable: boolean
@@ -121,61 +126,50 @@ export function MessageList({ messages, onScrollStateChange, scrollToBottom: ext
       hasPreviousTodo: boolean
       hasNextTodo: boolean
       isBetweenTodos: boolean
-      shouldIndent: boolean  // New field for indentation logic
+      shouldIndent: boolean
     }>()
 
-    // Process all messages to determine their positions and indentation
     messages.forEach((message, index) => {
       const isTodoTable = todoTableIds.has(message.id)
       const todoIndex = isTodoTable ? todoTableMessages.findIndex(msg => msg.id === message.id) : -1
-      const isExecuting = message.metadata?.isExecuting || message.content.includes('executing') || message.content.includes('Executing')
-      
-      // Find TODO table positions
-      const previousTodoIndex = messages.slice(0, index).findIndex(msg => todoTableIds.has(msg.id))
-      const nextTodoIndex = messages.slice(index + 1).findIndex(msg => todoTableIds.has(msg.id))
-      
-      // Determine if this message should be indented
+      const isExecuting = message.metadata?.isExecuting === true
+
+      const prevTodoIndex = findPrevIndex(m => todoTableIds.has(m.id), index - 1)
+      const nextTodoIndex = (() => {
+        for (let i = index + 1; i < messages.length; i++) if (todoTableIds.has(messages[i].id)) return i
+        return -1
+      })()
+      const prevUserIndex = findPrevIndex(m => m.role === 'user', index - 1)
+
       let shouldIndent = false
-      
       if (!isTodoTable && !isExecuting && message.role !== 'user') {
-        // Check if this is a Task Summary, Task Failed, Task Completed, or Task Analysis/Planning message
-        const isTaskSummary = message.content.includes('## Task Summary:') || message.content.includes('## Task Summary')
-        const isTaskFailed = message.content.includes('## Task Failed')
-        const isTaskCompleted = message.content.includes('## Task Completed') || 
-                               message.content.includes('Task Complete') || 
-                               message.content.includes('Task Completed') ||
-                               message.content.includes('Task completed successfully') ||
-                               message.content.includes('Task completed.')
-        const isTaskAnalysisOrPlanning = message.content.includes('Analyzing task complexity') || 
-                                        message.content.includes('Creating a step-by-step plan') ||
-                                        message.content.includes('Analyzing task') ||
-                                        message.content.includes('Creating plan')
-        
-        // Don't indent Task Summary, Task Failed, Task Completed, or Task Analysis/Planning messages
-        if (!isTaskSummary && !isTaskFailed && !isTaskCompleted && !isTaskAnalysisOrPlanning) {
-          // Check if there's a Task Manager before this message
-          const hasTaskManagerBefore = previousTodoIndex !== -1
-          
-          // Once a message is indented (comes after a Task Manager), it stays indented
-          shouldIndent = hasTaskManagerBefore
+        const content = message.content
+        const isTaskSummary = content.includes('## Task Summary:') || content.includes('## Task Summary')
+        const isTaskFailed = content.includes('## Task Failed')
+        const isTaskCompleted = content.includes('## Task Completed') || content.includes('Task Complete') || content.includes('Task Completed') || content.includes('Task completed successfully') || content.includes('Task completed.')
+        const isTopLevelHeading = content.trim().startsWith('## ') || content.includes('\n## ')
+        const isTaskAnalysisOrPlanning = content.includes('Analyzing task complexity') || content.includes('Creating a step-by-step plan') || content.includes('Analyzing task') || content.includes('Creating plan')
+
+        if (!isTaskSummary && !isTaskFailed && !isTaskCompleted && !isTaskAnalysisOrPlanning && !isTopLevelHeading) {
+          // Indent only if there is a Task Manager after the last user message
+          shouldIndent = prevTodoIndex !== -1 && prevTodoIndex > prevUserIndex
         }
       }
-      
+
       messagePositions.set(message.id, {
         isTodoTable,
         todoIndex,
         isFirst: isTodoTable && todoIndex === 0,
         isLast: isTodoTable && todoIndex === todoTableMessages.length - 1,
-        hasPreviousTodo: previousTodoIndex !== -1,
+        hasPreviousTodo: prevTodoIndex !== -1,
         hasNextTodo: nextTodoIndex !== -1,
-        isBetweenTodos: previousTodoIndex !== -1 && nextTodoIndex !== -1,
+        isBetweenTodos: prevTodoIndex !== -1 && nextTodoIndex !== -1,
         shouldIndent
       })
     })
 
     return messages
       .filter(message => {
-        // Hide todo_manager messages that are NOT TODO tables
         if (message.metadata?.toolName === 'todo_manager') {
           return message.content.includes('| # | Status | Task |')
         }
@@ -183,29 +177,12 @@ export function MessageList({ messages, onScrollStateChange, scrollToBottom: ext
       })
       .map((message, index) => {
         const position = messagePositions.get(message.id)!
-        
-        // Only show first and last TODO table messages
-        if (position.isTodoTable && !position.isFirst && !position.isLast) {
-          return null
-        }
-        
-        // Only apply animation delay to new messages
+        if (position.isTodoTable && !position.isFirst && !position.isLast) return null
         const isNewMessage = newMessageIdsRef.current.has(message.id)
         const animationDelay = isNewMessage ? index * 0.1 : 0
-        
-        return {
-          message,
-          position: position!,
-          animationDelay,
-          isNewMessage
-        }
+        return { message, position: position!, animationDelay, isNewMessage }
       })
-      .filter(Boolean) as Array<{
-        message: Message
-        position: NonNullable<ReturnType<typeof messagePositions.get>>
-        animationDelay: number
-        isNewMessage: boolean
-      }>
+      .filter(Boolean) as Array<{ message: Message, position: NonNullable<ReturnType<typeof messagePositions.get>>, animationDelay: number, isNewMessage: boolean }>
   }, [messages])
 
   // Initialize shuffled pool and current examples
@@ -363,7 +340,7 @@ export function MessageList({ messages, onScrollStateChange, scrollToBottom: ext
                     </span>
                     
                     {/* Glow effect */}
-                    <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-r from-brand/20 to-transparent"></div>
+                    <div className="absolute inset-0 rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-r from-brand/20 to-transparent"></div>
                   </Button>
                 </div>
               ))}
@@ -393,67 +370,54 @@ export function MessageList({ messages, onScrollStateChange, scrollToBottom: ext
         {/* Messages List */}
         <div className="p-6 space-y-3 pb-4">
           {(() => {
-            // Find first indented message to start the group line
-            const firstIndent = processedMessages.findIndex(pm => pm.position.shouldIndent)
-            if (firstIndent === -1) {
-              // No indented messages; render normally
-              return processedMessages.map(({ message, position, animationDelay, isNewMessage }) => (
-                <div
-                  key={message.id}
-                  className={isNewMessage ? 'animate-fade-in' : ''}
-                  style={{ animationDelay: isNewMessage ? `${animationDelay}s` : undefined }}
-                  data-todo-position={position.isFirst ? 'first' : position.isLast ? 'last' : null}
-                  data-todo-index={position.todoIndex}
-                  data-between-todos={position.isBetweenTodos ? 'true' : 'false'}
-                  data-has-previous-todo={position.hasPreviousTodo ? 'true' : 'false'}
-                  data-has-next-todo={position.hasNextTodo ? 'true' : 'false'}
-                  data-should-indent={position.shouldIndent ? 'true' : 'false'}
-                >
-                  <MessageItem message={message} shouldIndent={position.shouldIndent} showLocalIndentLine={position.shouldIndent} />
-                </div>
-              ))
+            const blocks: React.ReactNode[] = []
+            let inGroup = false
+            let groupChildren: React.ReactNode[] = []
+
+            const pushGroup = () => {
+              if (groupChildren.length > 0) {
+                blocks.push(
+                  <div key={`group-${blocks.length}`} className="relative pl-4 before:content-[''] before:absolute before:left-[8px] before:top-0 before:bottom-0 before:w-px before:bg-gradient-to-b before:from-brand/40 before:via-brand/30 before:to-brand/20">
+                    {groupChildren}
+                  </div>
+                )
+                groupChildren = []
+              }
             }
 
-            // Render messages before the indented group
-            const before = processedMessages.slice(0, firstIndent).map(({ message, position, animationDelay, isNewMessage }) => (
-              <div
-                key={message.id}
-                className={isNewMessage ? 'animate-fade-in' : ''}
-                style={{ animationDelay: isNewMessage ? `${animationDelay}s` : undefined }}
-                data-todo-position={position.isFirst ? 'first' : position.isLast ? 'last' : null}
-                data-todo-index={position.todoIndex}
-                data-between-todos={position.isBetweenTodos ? 'true' : 'false'}
-                data-has-previous-todo={position.hasPreviousTodo ? 'true' : 'false'}
-                data-has-next-todo={position.hasNextTodo ? 'true' : 'false'}
-                data-should-indent={position.shouldIndent ? 'true' : 'false'}
-              >
-                <MessageItem message={message} shouldIndent={position.shouldIndent} showLocalIndentLine={position.shouldIndent} />
-              </div>
-            ))
+            processedMessages.forEach(({ message, position, animationDelay, isNewMessage }) => {
+              const commonAttrs = {
+                key: message.id,
+                className: isNewMessage ? 'animate-fade-in' : '',
+                style: { animationDelay: isNewMessage ? `${animationDelay}s` : undefined },
+                'data-todo-position': position.isFirst ? 'first' : position.isLast ? 'last' : null,
+                'data-todo-index': position.todoIndex,
+                'data-between-todos': position.isBetweenTodos ? 'true' : 'false',
+                'data-has-previous-todo': position.hasPreviousTodo ? 'true' : 'false',
+                'data-has-next-todo': position.hasNextTodo ? 'true' : 'false',
+                'data-should-indent': position.shouldIndent ? 'true' : 'false'
+              } as any
 
-            // Render messages from first indented onwards with a single continuous vertical line
-            const after = (
-              <div className="relative pl-4 before:content-[''] before:absolute before:left-[8px] before:top-0 before:bottom-0 before:w-px before:bg-gradient-to-b before:from-brand/40 before:via-brand/30 before:to-brand/20">
-                {processedMessages.slice(firstIndent).map(({ message, position, animationDelay, isNewMessage }) => (
-                  <div
-                    key={message.id}
-                    className={isNewMessage ? 'animate-fade-in' : ''}
-                    style={{ animationDelay: isNewMessage ? `${animationDelay}s` : undefined }}
-                    data-todo-position={position.isFirst ? 'first' : position.isLast ? 'last' : null}
-                    data-todo-index={position.todoIndex}
-                    data-between-todos={position.isBetweenTodos ? 'true' : 'false'}
-                    data-has-previous-todo={position.hasPreviousTodo ? 'true' : 'false'}
-                    data-has-next-todo={position.hasNextTodo ? 'true' : 'false'}
-                    data-should-indent={'true'}
-                  >
-                    {/* Pass shouldIndent true but hide per-item line via group container and prevent extra left margin */}
+              if (position.shouldIndent) {
+                if (!inGroup) inGroup = true
+                groupChildren.push(
+                  <div {...commonAttrs}>
                     <MessageItem message={message} shouldIndent={true} showLocalIndentLine={false} applyIndentMargin={false} />
                   </div>
-                ))}
-              </div>
-            )
+                )
+              } else {
+                if (inGroup) { pushGroup(); inGroup = false }
+                blocks.push(
+                  <div {...commonAttrs}>
+                    <MessageItem message={message} shouldIndent={false} showLocalIndentLine={false} />
+                  </div>
+                )
+              }
+            })
 
-            return (<>{before}{after}</>)
+            if (inGroup) pushGroup()
+
+            return <>{blocks}</>
           })()}
         </div>
       </div>

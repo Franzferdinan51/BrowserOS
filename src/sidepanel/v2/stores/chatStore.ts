@@ -13,6 +13,10 @@ export const MessageSchema = z.object({
     isExecuting: z.boolean().optional(),  // Flag for executing messages
     isCompleting: z.boolean().optional(),  // Flag for messages that are finishing execution
     isStartup: z.boolean().optional(),  // Flag for initial startup status lines
+    kind: z.enum(['stream', 'execution', 'tool-result', 'system', 'error', 'cancel', 'task-result']).optional(),  // Normalized message kind
+    streamId: z.string().optional(),  // Streaming correlation id
+    category: z.string().optional(),  // Optional category from system messages
+    success: z.boolean().optional()  // Success flag for tool/task results
   }).optional()  // Optional metadata
 })
 

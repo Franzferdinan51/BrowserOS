@@ -167,6 +167,97 @@ const SelectedTabDataDisplay = ({ content }: SelectedTabDataDisplayProps) => {
   )
 }
 
+// Extracted items (links/headlines) minimal display
+interface ExtractedItemsDisplayProps { content: string }
+
+type ExtractedLink = { source?: string, url: string }
+
+const urlRegex = /https?:\/\/[^\s)>,]+/g
+
+const sanitizeUrl = (u: string): string => {
+  return u.replace(/[),]+$/g, '')
+}
+
+const parseExtractedLinks = (content: string): ExtractedLink[] => {
+  const results: ExtractedLink[] = []
+  if (!content) return results
+  const labelRegex = /([A-Z][A-Za-z0-9 .&-]{1,50}):/g
+  const segments: Array<{ label?: string, text: string }> = []
+  let match: RegExpExecArray | null
+  const labels: Array<{ label: string, index: number }> = []
+  while ((match = labelRegex.exec(content)) !== null) {
+    labels.push({ label: match[1].trim(), index: match.index })
+  }
+  if (labels.length === 0) {
+    const urls = content.match(urlRegex) || []
+    urls.forEach(u => results.push({ url: sanitizeUrl(u) }))
+    return results
+  }
+  labels.forEach((l, i) => {
+    const start = l.index + l.label.length + 1
+    const end = i + 1 < labels.length ? labels[i + 1].index : content.length
+    const text = content.slice(start, end)
+    const urls = text.match(urlRegex) || []
+    urls.forEach(u => results.push({ source: l.label, url: sanitizeUrl(u) }))
+  })
+  return results
+}
+
+const parseExtractedHeadlines = (content: string): string[] => {
+  return content
+    .split(/\r?\n+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 0 && !urlRegex.test(s))
+}
+
+const shortenUrl = (u: string): string => {
+  try {
+    const parsed = new URL(u)
+    return parsed.host
+  } catch {
+    return u
+  }
+}
+
+const ExtractedItemsDisplay = ({ content }: ExtractedItemsDisplayProps) => {
+  const links = parseExtractedLinks(content)
+  const headlines = links.length === 0 ? parseExtractedHeadlines(content) : []
+  type Item = { primary: string, secondary?: string }
+  const items: Item[] = links.length > 0 
+    ? links.map(l => ({ primary: l.source || shortenUrl(l.url), secondary: l.url }))
+    : headlines.map(h => ({ primary: h }))
+
+  if (items.length === 0) {
+    return <div className="text-sm text-muted-foreground">No extracted content</div>
+  }
+
+  return (
+    <div className="space-y-1">
+      <div className="bg-muted/30 rounded-lg p-2 border border-border/50">
+        <div className="space-y-1">
+          {items.map((it, idx) => (
+            <details key={`${it.primary}-${idx}`} className="group">
+              <summary className="cursor-pointer list-none text-sm text-foreground flex items-center gap-2">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand/60" />
+                <span className="truncate">
+                  {it.secondary ? `${it.primary} — ${shortenUrl(it.secondary)}` : it.primary}
+                </span>
+              </summary>
+              <div className="mt-1 ml-4 text-xs text-muted-foreground break-words">
+                {it.secondary ? (
+                  <a href={it.secondary} target="_blank" rel="noreferrer" className="underline">{it.secondary}</a>
+                ) : (
+                  <span className="whitespace-pre-wrap">{it.primary}</span>
+                )}
+              </div>
+            </details>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /**
  * MessageItem component
  * Renders individual messages with role-based styling
@@ -178,10 +269,12 @@ export const MessageItem = memo<MessageItemProps>(function MessageItem({ message
   const isSystem = message.role === 'system'
   const { markMessageAsCompleting, removeExecutingMessage, messages, executingMessageRemoving } = useChatStore()
   
-  const isExecuting = message.metadata?.isExecuting || message.content.includes('executing') || message.content.includes('Executing')
+  // Prefer metadata flags over content heuristics
+  const isExecuting = message.metadata?.isExecuting === true
   const isCompleting = message.metadata?.isCompleting || (isExecuting && executingMessageRemoving)
   const [isAnimating, setIsAnimating] = useState(false)
   const [slideUpAmount, setSlideUpAmount] = useState(0)
+  const kind = message.metadata?.kind
 
   // Memoize expensive content checks to avoid recalculation on every render
   const contentChecks = useMemo(() => {
@@ -194,6 +287,7 @@ export const MessageItem = memo<MessageItemProps>(function MessageItem({ message
                                 content.includes('Creating a step-by-step plan') ||
                                 content.includes('Analyzing task') ||
                                 content.includes('Creating plan'),
+      isTopLevelHeading: content.trim().startsWith('## ') || content.includes('\n## '),
       isTaskComplete: content.includes('## Task Completed') || 
                      content.includes('Task Complete') || 
                      content.includes('Task Completed') ||
@@ -272,14 +366,47 @@ export const MessageItem = memo<MessageItemProps>(function MessageItem({ message
 
   // Memoize content renderer to avoid recalculation
   const contentRenderer = useMemo(() => {
+    // Always render Task Manager via component if detected
+    if (contentChecks.isTodoTable) {
+      return 'todo-table'
+    }
+
+    // Tab data (formatted list) should take precedence over generic tool-result rendering
+    const jsonData = parseJsonContent(message.content)
+    if (jsonData && isTabData(jsonData)) {
+      return 'tab-data'
+    }
+    if (jsonData && isSelectedTabData(jsonData)) {
+      return 'selected-tab-data'
+    }
+
+    // Normalize by metadata.kind first
+    if (kind === 'tool-result') {
+      if (message.metadata?.toolName === 'extract_tool') {
+        // Uniform minimal styling for extract tool (links or headlines)
+        return 'extracted-items'
+      }
+      return 'tool-result'
+    }
+    if (kind === 'task-result') {
+      return message.metadata?.success ? 'task-complete' : 'task-summary'
+    }
+    if (kind === 'stream') {
+      return 'markdown'
+    }
+    if (kind === 'error') {
+      return 'task-failed'
+    }
+    if (kind === 'cancel') {
+      return 'plain-text'
+    }
+    if (kind === 'system') {
+      return 'plain-text'
+    }
+    
     // User messages - plain text
     if (isUser) {
       return 'plain-text'
-    }
-
-    // TODO lists - custom table rendering
-    if (contentChecks.isTodoTable) {
-      return 'todo-table'
     }
 
     // Task summaries - markdown with special styling
@@ -295,15 +422,6 @@ export const MessageItem = memo<MessageItemProps>(function MessageItem({ message
     // Task completion - special single line display
     if (contentChecks.isTaskComplete) {
       return 'task-complete'
-    }
-
-    // Check for JSON content (like tab data)
-    const jsonData = parseJsonContent(message.content)
-    if (jsonData && isTabData(jsonData)) {
-      return 'tab-data'
-    }
-    if (jsonData && isSelectedTabData(jsonData)) {
-      return 'selected-tab-data'
     }
 
     // Tool-specific messages - check metadata
@@ -396,6 +514,9 @@ export const MessageItem = memo<MessageItemProps>(function MessageItem({ message
       case 'selected-tab-data':
         return <SelectedTabDataDisplay content={message.content} />
 
+      case 'extracted-items':
+        return <ExtractedItemsDisplay content={message.content} />
+
       case 'task-complete':
         return (
           <div className="space-y-3">
@@ -418,7 +539,15 @@ export const MessageItem = memo<MessageItemProps>(function MessageItem({ message
           </div>
         )
       
-      case 'tool-result':
+      case 'tool-result': {
+        const rawName = message.metadata?.toolName || 'tool result'
+        // Keep the label minimal; do not render verbose tool content
+        return (
+          <div className="text-sm text-muted-foreground font-medium">
+            {rawName}
+          </div>
+        )
+      }
       case 'markdown':
         return (
           <MarkdownContent

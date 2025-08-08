@@ -118,7 +118,7 @@ export function HelpSection ({
            <div className="space-y-3">
              <h3 className="text-base font-semibold text-foreground">Quick Controls</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
-                 <div className="flex items-center gap-1 p-3 bg-muted/60 dark:bg-muted/30 rounded-xl border border-border/60 dark:border-border/30 shadow-sm">
+                 <div className="flex items-center gap-2 p-3 bg-muted/60 dark:bg-muted/30 rounded-xl border border-border/60 dark:border-border/30 shadow-sm">
                    <div className="w-7 h-7 bg-gradient-to-br from-brand/20 to-brand/10 rounded-xl flex items-center justify-center">
                      <PauseIconFilled />
                    </div>
@@ -128,7 +128,7 @@ export function HelpSection ({
                    </div>
                  </div>
 
-                                   <div className="flex items-center gap-1 p-3 bg-muted/60 dark:bg-muted/30 rounded-xl border border-border/60 dark:border-border/30 shadow-sm">
+                 <div className="flex items-center gap-2 p-3 bg-muted/60 dark:bg-muted/30 rounded-xl border border-border/60 dark:border-border/30 shadow-sm">
                    <div className="w-7 h-7 bg-gradient-to-br from-brand/20 to-brand/10 rounded-xl flex items-center justify-center">
                      <RefreshIcon />
                    </div>
@@ -139,8 +139,8 @@ export function HelpSection ({
                  </div>
                </div>
 
-             <div className="p-4 bg-gradient-to-r from-brand/5 to-brand/10 border border-brand/20 rounded-xl">
-               <div className="flex items-start ">
+              <div className="p-4 bg-gradient-to-r from-brand/5 to-brand/10 border border-brand/20 rounded-xl">
+               <div className="flex items-start gap-2">
                  <div className="w-5 h-5 bg-brand/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
                    <HelpIcon />
                  </div>
@@ -158,14 +158,14 @@ export function HelpSection ({
            <div className="space-y-3">
              <h3 className="text-base font-semibold text-foreground">What I Can Do</h3>
 
-             {Object.entries(AGENT_EXAMPLES).map(([key, agent]) => (
-               <div key={key} className="space-y-2">
+              {Object.entries(AGENT_EXAMPLES).map(([key, agent]) => (
+               <div key={key} className="space-y-1">
                  <div className="flex items-center gap-1">
                    <div className="w-1.5 h-1.5 bg-brand rounded-full"></div>
                    <h4 className="text-sm font-semibold text-foreground">{agent.title}</h4>
                  </div>
                  <p className="text-xs text-muted-foreground/80 ml-3.5">{agent.description}</p>
-                                   <div className="grid grid-cols-1 gap-1 ml-3.5">
+                                   <div className="grid grid-cols-1 gap-1 ml-3.5 mt-1">
                     {agent.examples.map((example, index) => (
                       <div 
                         key={index} 

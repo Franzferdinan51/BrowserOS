@@ -53,6 +53,18 @@ export function formatToolOutput(toolName: string, result: ToolResult): string {
         return output;
       }
       
+      // If the tool returned an array of tab objects, stringify to JSON so UI can render the formatted list
+      if (Array.isArray(output) && output.length > 0 && output.every(tab => 
+        typeof tab === 'object' &&
+        typeof (tab as any).id === 'number' &&
+        typeof (tab as any).url === 'string' &&
+        typeof (tab as any).title === 'string' &&
+        // windowId may be missing in some contexts; allow either case
+        ((tab as any).windowId === undefined || typeof (tab as any).windowId === 'number')
+      )) {
+        return JSON.stringify(output);
+      }
+      
       // For non-tab data or errors, return formatted message
       if (Array.isArray(output) && output.length === 0) {
         return 'No open tabs found';
@@ -65,6 +77,14 @@ export function formatToolOutput(toolName: string, result: ToolResult): string {
       // Output: { isComplete: boolean, reasoning: string, suggestions: string[] }
       const status = output.isComplete ? 'Complete' : 'Incomplete';
       return `Task validation: ${status}`;
+    }
+
+    case 'extract_tool': {
+      // Output: { content: string, reasoning: string }
+      if (output && typeof output === 'object' && typeof (output as any).content === 'string') {
+        return (output as any).content as string;
+      }
+      return typeof output === 'string' ? output : JSON.stringify(output);
     }
 
     case 'todo_manager_tool': {

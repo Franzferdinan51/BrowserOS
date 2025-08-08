@@ -380,7 +380,7 @@ export function MessageList({ messages, onScrollStateChange, scrollToBottom: ext
       
       {/* Messages container */}
       <div 
-        className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-brand/30 scrollbar-track-transparent"
+        className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-brand/30 scrollbar-track-transparent"
         style={{
           background: 'radial-gradient(ellipse at top right, hsl(var(--background)) 0%, hsl(var(--background)) 40%, transparent 100%)'
         }}
@@ -433,7 +433,7 @@ export function MessageList({ messages, onScrollStateChange, scrollToBottom: ext
 
             // Render messages from first indented onwards with a single continuous vertical line
             const after = (
-              <div className="relative pl-8 before:content-[''] before:absolute before:left-[12px] before:top-0 before:bottom-0 before:w-px before:bg-gradient-to-b before:from-brand/40 before:via-brand/30 before:to-brand/20">
+              <div className="relative pl-4 before:content-[''] before:absolute before:left-[8px] before:top-0 before:bottom-0 before:w-px before:bg-gradient-to-b before:from-brand/40 before:via-brand/30 before:to-brand/20">
                 {processedMessages.slice(firstIndent).map(({ message, position, animationDelay, isNewMessage }) => (
                   <div
                     key={message.id}
@@ -446,8 +446,8 @@ export function MessageList({ messages, onScrollStateChange, scrollToBottom: ext
                     data-has-next-todo={position.hasNextTodo ? 'true' : 'false'}
                     data-should-indent={'true'}
                   >
-                    {/* Pass shouldIndent true but hide per-item line via group container */}
-                    <MessageItem message={message} shouldIndent={true} showLocalIndentLine={false} />
+                    {/* Pass shouldIndent true but hide per-item line via group container and prevent extra left margin */}
+                    <MessageItem message={message} shouldIndent={true} showLocalIndentLine={false} applyIndentMargin={false} />
                   </div>
                 ))}
               </div>

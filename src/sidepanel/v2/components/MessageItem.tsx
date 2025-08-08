@@ -11,6 +11,7 @@ interface MessageItemProps {
   message: Message
   shouldIndent?: boolean
   showLocalIndentLine?: boolean  // When true, renders per-item vertical line
+  applyIndentMargin?: boolean  // Control whether to apply left margin for indent
 }
 
 // Helper function to detect and parse JSON content
@@ -171,7 +172,7 @@ const SelectedTabDataDisplay = ({ content }: SelectedTabDataDisplayProps) => {
  * Renders individual messages with role-based styling
  * Memoized to prevent re-renders when message hasn't changed
  */
-export const MessageItem = memo(function MessageItem({ message, shouldIndent = false, showLocalIndentLine = false }: MessageItemProps) {
+export const MessageItem = memo<MessageItemProps>(function MessageItem({ message, shouldIndent = false, showLocalIndentLine = false, applyIndentMargin = true }: MessageItemProps) {
   const isUser = message.role === 'user'
   const isError = message.metadata?.error || message.content.includes('## Task Failed')
   const isSystem = message.role === 'system'

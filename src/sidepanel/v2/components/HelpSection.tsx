@@ -63,6 +63,15 @@ export function HelpSection ({
     setVersion(manifest.version || '')
   }, [])
 
+  // Lock background scroll while modal is open
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [])
+
   if (!isOpen) return null
 
      return (

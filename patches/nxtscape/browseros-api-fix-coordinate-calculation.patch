@@ -1,18 +1,18 @@
-From e1ba9bcf0552537c6158bb5057db4f947f295293 Mon Sep 17 00:00:00 2001
+From b291917ed013e35b372ffe63cdf5dbc88aa11a17 Mon Sep 17 00:00:00 2001
 From: Nikhil Sonti <nikhilsv92@gmail.com>
 Date: Thu, 7 Aug 2025 09:22:55 -0700
 Subject: [PATCH] browseros api: fix coordinate calculation for interactive
  snapshot
 
 ---
- .../api/browser_os/browser_os_api_helpers.cc  | 242 ++++++++++++++++--
+ .../api/browser_os/browser_os_api_helpers.cc  | 246 ++++++++++++++++--
  .../api/browser_os/browser_os_api_helpers.h   |  23 ++
  .../browser_os_snapshot_processor.cc          | 195 ++++++--------
  .../browser_os_snapshot_processor.h           |  16 +-
- 4 files changed, 348 insertions(+), 128 deletions(-)
+ 4 files changed, 352 insertions(+), 128 deletions(-)
 
 diff --git a/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.cc b/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.cc
-index ff119a6b12134..f64cc13ad5ec6 100644
+index ff119a6b12134..716630689b088 100644
 --- a/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.cc
 +++ b/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.cc
 @@ -14,11 +14,14 @@
@@ -30,10 +30,14 @@ index ff119a6b12134..f64cc13ad5ec6 100644
  #include "ui/base/ime/ime_text_span.h"
  #include "ui/events/base_event_utils.h"
  #include "ui/events/keycodes/dom/dom_code.h"
-@@ -30,6 +33,207 @@
+@@ -30,6 +33,211 @@
  namespace extensions {
  namespace api {
  
++// Define PI for cross-platform compatibility
++// M_PI is not defined on Windows/MSVC by default
++constexpr float kPi = 3.14159265358979323846f;
++
 +// Compute CSS->widget scale matching DevTools InputHandler::ScaleFactor.
 +// We intentionally exclude device scale factor (DSF). Widget coordinates
 +// used by input are in DIPs; DSF is handled by the compositor. We also set
@@ -107,7 +111,7 @@ index ff119a6b12134..f64cc13ad5ec6 100644
 +  // Create visualization with a cursor triangle and ripple.
 +  // Randomize starting position within offset_range for more natural movement.
 +  // Generate random angle and distance for starting position
-+  float angle = (rand() % 360) * M_PI / 180.0f;  // Random angle in radians
++  float angle = (rand() % 360) * kPi / 180.0f;  // Random angle in radians
 +  float distance = offset_range * 0.5f + (rand() % (int)(offset_range * 0.5f)); // 50-100% of offset_range
 +  
 +  const float start_x = point.x() - (cos(angle) * distance);
@@ -238,7 +242,7 @@ index ff119a6b12134..f64cc13ad5ec6 100644
  // Helper to create and dispatch mouse events for clicking
  void PointClick(content::WebContents* web_contents, 
                    const gfx::PointF& point) {
-@@ -45,12 +249,14 @@ void PointClick(content::WebContents* web_contents,
+@@ -45,12 +253,14 @@ void PointClick(content::WebContents* web_contents,
    if (!rwhv)
      return;
  
@@ -259,7 +263,7 @@ index ff119a6b12134..f64cc13ad5ec6 100644
  
    // Create mouse down event
    blink::WebMouseEvent mouse_down;
-@@ -58,8 +264,9 @@ void PointClick(content::WebContents* web_contents,
+@@ -58,8 +268,9 @@ void PointClick(content::WebContents* web_contents,
    mouse_down.button = blink::WebPointerProperties::Button::kLeft;
    mouse_down.click_count = 1;
    mouse_down.SetPositionInWidget(widget_point.x(), widget_point.y());
@@ -271,7 +275,7 @@ index ff119a6b12134..f64cc13ad5ec6 100644
    mouse_down.SetTimeStamp(ui::EventTimeForNow());
    mouse_down.SetModifiers(blink::WebInputEvent::kLeftButtonDown);
    
-@@ -69,8 +276,7 @@ void PointClick(content::WebContents* web_contents,
+@@ -69,8 +280,7 @@ void PointClick(content::WebContents* web_contents,
    mouse_up.button = blink::WebPointerProperties::Button::kLeft;
    mouse_up.click_count = 1;
    mouse_up.SetPositionInWidget(widget_point.x(), widget_point.y());
@@ -281,7 +285,7 @@ index ff119a6b12134..f64cc13ad5ec6 100644
    mouse_up.SetTimeStamp(ui::EventTimeForNow());
    
    // Send the events
-@@ -495,9 +701,7 @@ void JavaScriptType(content::WebContents* web_contents,
+@@ -495,9 +705,7 @@ void JavaScriptType(content::WebContents* web_contents,
  bool ClickWithDetection(content::WebContents* web_contents,
                          const NodeInfo& node_info) {
    // First try coordinate-based click with change detection
@@ -292,7 +296,7 @@ index ff119a6b12134..f64cc13ad5ec6 100644
    
    bool changed = BrowserOSChangeDetector::ExecuteWithDetection(
        web_contents,
-@@ -521,6 +725,9 @@ bool ClickWithDetection(content::WebContents* web_contents,
+@@ -521,6 +729,9 @@ bool ClickWithDetection(content::WebContents* web_contents,
  bool TypeWithDetection(content::WebContents* web_contents,
                        const NodeInfo& node_info,
                        const std::string& text) {
@@ -302,7 +306,7 @@ index ff119a6b12134..f64cc13ad5ec6 100644
    // Try native typing first (more natural interaction)
    bool changed = BrowserOSChangeDetector::ExecuteWithDetection(
        web_contents,
-@@ -528,9 +735,6 @@ bool TypeWithDetection(content::WebContents* web_contents,
+@@ -528,9 +739,6 @@ bool TypeWithDetection(content::WebContents* web_contents,
          // Focus the element first
          HtmlFocus(web_contents, node_info);
          // Click to ensure activation
@@ -312,7 +316,7 @@ index ff119a6b12134..f64cc13ad5ec6 100644
          PointClick(web_contents, click_point);
          // Then type using native IME
          NativeType(web_contents, text);
-@@ -553,6 +757,12 @@ bool TypeWithDetection(content::WebContents* web_contents,
+@@ -553,6 +761,12 @@ bool TypeWithDetection(content::WebContents* web_contents,
  // Helper to clear an input field with change detection
  bool ClearWithDetection(content::WebContents* web_contents,
                         const NodeInfo& node_info) {

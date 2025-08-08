@@ -17,7 +17,7 @@ nxtscape/pin-nxtscape-ai-chat.patch
 nxtscape/ai-chat-extension.patch
 nxtscape/bug-reporter-extension.patch
 nxtscape/browserOS-API.patch
-nxtscape/browseros-api-fix-coordinate-calculation-for-interac.patch
+nxtscape/browseros-api-fix-coordinate-calculation.patch
 nxtscape/new-snapshot-API.patch
 
 # updater

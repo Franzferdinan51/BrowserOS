@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { Textarea } from '@/sidepanel/components/ui/textarea'
 import { Button } from '@/sidepanel/components/ui/button'
 import { LazyTabSelector } from './LazyTabSelector'
@@ -26,12 +26,21 @@ export function ChatInput({ isConnected, isProcessing }: ChatInputProps) {
   const [showTabSelector, setShowTabSelector] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   
-  const { addMessage, setProcessing, selectedTabIds, clearSelectedTabs } = useChatStore()
-  const { sendMessage } = useSidePanelPortMessaging()
+  const { addMessage, setProcessing, selectedTabIds, clearSelectedTabs, messages } = useChatStore()
+  const { sendMessage, addMessageListener, removeMessageListener, connected: portConnected } = useSidePanelPortMessaging()
   const { getContextTabs, toggleTabSelection } = useTabsStore()
   
   // Auto-resize textarea
   useAutoResize(textareaRef, input)
+  
+  // history navigation state
+  const [historyIndex, setHistoryIndex] = useState<number>(-1) // -1 means not browsing history
+  const [draftBeforeHistory, setDraftBeforeHistory] = useState<string>('')
+
+  const userHistory: string[] = useMemo(() => {
+    // Build list of previous user messages in chronological order
+    return messages.filter(m => m.role === 'user').map(m => m.content)
+  }, [messages])
   
   // Focus textarea on mount and when processing stops
   useEffect(() => {
@@ -91,6 +100,8 @@ export function ChatInput({ isConnected, isProcessing }: ChatInputProps) {
     
     // Clear input and selected tabs
     setInput('')
+    setHistoryIndex(-1)
+    setDraftBeforeHistory('')
     clearSelectedTabs()
     setShowTabSelector(false)
   }
@@ -114,6 +125,7 @@ export function ChatInput({ isConnected, isProcessing }: ChatInputProps) {
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value
     setInput(newValue)
+    // If user types while browsing history, remain in current position
     // Only show selector when user just typed '@' starting a new token
     const lastChar: string = newValue.slice(-1)
     if (lastChar === '@' && !showTabSelector) {
@@ -157,6 +169,53 @@ export function ChatInput({ isConnected, isProcessing }: ChatInputProps) {
       showTabSelector
     }
   )
+  
+  // Move caret to end after programmatic updates
+  const moveCaretToEnd = useCallback(() => {
+    const ta = textareaRef.current
+    if (!ta) return
+    const len: number = ta.value.length
+    ta.selectionStart = len
+    ta.selectionEnd = len
+  }, [])
+
+  // Handle ArrowUp/ArrowDown history navigation when caret is at boundaries
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showTabSelector) return
+    if (e.altKey || e.ctrlKey || e.metaKey) return
+    const ta = textareaRef.current
+    if (!ta) return
+    const atStart: boolean = ta.selectionStart === 0 && ta.selectionEnd === 0
+    const atEnd: boolean = ta.selectionStart === input.length && ta.selectionEnd === input.length
+
+    if (e.key === 'ArrowUp' && !e.shiftKey) {
+      if (!atStart) return
+      if (userHistory.length === 0) return
+      e.preventDefault()
+      if (historyIndex === -1) setDraftBeforeHistory(input)
+      const nextIndex: number = historyIndex === -1 ? userHistory.length - 1 : Math.max(0, historyIndex - 1)
+      setHistoryIndex(nextIndex)
+      setInput(userHistory[nextIndex] || '')
+      requestAnimationFrame(moveCaretToEnd)
+      return
+    }
+
+    if (e.key === 'ArrowDown' && !e.shiftKey) {
+      if (!atEnd) return
+      if (userHistory.length === 0) return
+      if (historyIndex === -1) return
+      e.preventDefault()
+      const nextIndex: number = historyIndex + 1
+      if (nextIndex >= userHistory.length) {
+        setHistoryIndex(-1)
+        setInput(draftBeforeHistory)
+      } else {
+        setHistoryIndex(nextIndex)
+        setInput(userHistory[nextIndex] || '')
+      }
+      requestAnimationFrame(moveCaretToEnd)
+    }
+  }
   
   const getPlaceholder = () => {
     if (!isConnected) return 'Disconnected'
@@ -250,6 +309,7 @@ export function ChatInput({ isConnected, isProcessing }: ChatInputProps) {
               ref={textareaRef}
               value={input}
               onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
               placeholder={getPlaceholder()}
               disabled={!isConnected}
               className={cn(

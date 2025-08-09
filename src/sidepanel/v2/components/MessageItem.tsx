@@ -14,6 +14,14 @@ interface MessageItemProps {
   applyIndentMargin?: boolean  // Control whether to apply left margin for indent
 }
 
+// Format timestamp once using the message's own timestamp
+const formatTime = (ts: Date | string | undefined): string => {
+  if (!ts) return ''
+  const d = typeof ts === 'string' ? new Date(ts) : ts
+  if (!(d instanceof Date) || isNaN(d.getTime())) return ''
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
 // Helper function to detect and parse JSON content
 const parseJsonContent = (content: string) => {
   try {
@@ -663,7 +671,7 @@ export const MessageItem = memo<MessageItemProps>(function MessageItem({ message
           {/* Timestamp - only show for specific message types */}
           {displayOptions.shouldShowTimestamp && (
             <div className={cn('text-xs opacity-50', isUser ? 'text-right' : 'text-left')}>
-              {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {formatTime(message.timestamp)}
             </div>
           )}
         </div>

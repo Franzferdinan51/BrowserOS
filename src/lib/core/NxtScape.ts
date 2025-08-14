@@ -29,6 +29,7 @@ export type NxtScapeConfig = z.infer<typeof NxtScapeConfigSchema>;
  */
 export const RunOptionsSchema = z.object({
   query: z.string(), // Natural language user query
+  mode: z.enum(['chat', 'browse']), // Execution mode: 'chat' for Q&A, 'browse' for automation
   tabIds: z.array(z.number()).optional(), // Optional array of tab IDs for context (e.g., which tabs to summarize) - NOT for agent operation
   eventBus: z.instanceof(EventBus), // EventBus for streaming updates
   eventProcessor: z.instanceof(EventProcessor), // EventProcessor for high-level event handling
@@ -170,13 +171,13 @@ export class NxtScape {
     }
 
     const parsedOptions = RunOptionsSchema.parse(options);
-    const { query, tabIds, eventBus, eventProcessor } = parsedOptions;
+    const { query, mode, tabIds, eventBus, eventProcessor } = parsedOptions;
 
     const runStartTime = Date.now();
 
     Logging.log(
       "NxtScape",
-      `Processing user query with unified classification: ${query}${
+      `Processing user query in ${mode} mode: ${query}${
         tabIds ? ` (${tabIds.length} tabs)` : ""
       }`,
     );
@@ -221,8 +222,8 @@ export class NxtScape {
 
 
     try {
-      // Check if chat mode is enabled
-      if (this.executionContext.isChatMode()) {
+      // Use explicit mode parameter for agent selection
+      if (mode === 'chat') {
         // Use ChatAgent for Q&A mode
         if (!this.chatAgent) {
           throw new Error("ChatAgent not initialized");
@@ -234,6 +235,7 @@ export class NxtScape {
         if (!this.browserAgent) {
           throw new Error("BrowserAgent not initialized");
         }
+        Logging.log("NxtScape", "Executing in Browse Mode (Automation)");
         await this.browserAgent.execute(query);
       }
       

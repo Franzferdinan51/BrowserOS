@@ -500,10 +500,10 @@ async function handleExecuteQueryPort(
     // Initialize NxtScape if not already done
     await ensureNxtScapeInitialized()
     
-    // Set chat mode if specified
+    // Note: We now pass mode explicitly to run(), but keep setChatMode for backward compatibility
     if (payload.chatMode !== undefined) {
-      nxtScape.setChatMode(payload.chatMode)
-      debugLog(`Chat mode ${payload.chatMode ? 'enabled' : 'disabled'} for this query`)
+      nxtScape.setChatMode(payload.chatMode)  // Keep for any ExecutionContext dependencies
+      debugLog(`Mode set to ${payload.chatMode ? 'chat' : 'browse'} for this query`)
     }
     
     // Create streaming components
@@ -515,6 +515,7 @@ async function handleExecuteQueryPort(
     
     const result = await nxtScape.run({
       query: payload.query,
+      mode: payload.chatMode ? 'chat' : 'browse',  // Convert boolean to explicit mode
       tabIds: payload.tabIds,
       eventBus: eventBus,
       eventProcessor: eventProcessor

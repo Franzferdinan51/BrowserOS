@@ -23,7 +23,7 @@ interface ExtractedPageContext {
 
 /**
  * ChatAgent - Lightweight agent for Q&A interactions with web pages
- * Optimized for sub-400ms first response through two-pass design
+ * Direct streaming answers without planning or complex tool orchestration
  */
 export class ChatAgent {
   // Constants
@@ -77,6 +77,10 @@ export class ChatAgent {
     try {
       this._checkAborted()
       
+      // Configure EventProcessor for direct streaming (no thinking UI)
+      this.eventEmitter.setAgentName('ChatAgent')
+      this.eventEmitter.setShowThinking(false)
+      
       // Extract page context once
       const pageContext = await this._extractPageContext()
       
@@ -86,35 +90,19 @@ export class ChatAgent {
       // Initialize chat with system prompt and query
       this._initializeChat(systemPrompt, query)
       
-      // Pass 1: Direct streaming without tools (target <400ms)
-      const startTime = performance.now()
-      const pass1Message = await this._streamLLM({ tools: false })
-      const elapsed = performance.now() - startTime
+      // Stream direct answer without tools
+      await this._streamLLM({ tools: false })
       
-      if (elapsed > 400) {
-        Logging.log('ChatAgent', `Pass 1 took ${elapsed.toFixed(0)}ms (target: <400ms)`, 'warning')
-      } else {
-        Logging.log('ChatAgent', `Pass 1 completed in ${elapsed.toFixed(0)}ms`, 'info')
-      }
-      
-      // Check if Pass 1 provided a confident answer
-      if (this._isConfident(pass1Message)) {
-        Logging.log('ChatAgent', 'Pass 1 provided confident answer, completing')
-        return
-      }
-      
-      // TODO: Implement Pass 2 with tools (future enhancement)
-      // For now, just log that Pass 2 would be needed
-      Logging.log('ChatAgent', 'Pass 2 with tools would be triggered here (not implemented yet)')
+      Logging.log('ChatAgent', 'Q&A response completed')
       
     } catch (error) {
       if (error instanceof AbortError) {
         Logging.log('ChatAgent', 'Execution aborted by user')
-        this.eventEmitter.emitCompletion('Execution cancelled')
+        this.eventEmitter.info('Execution cancelled')
       } else {
         const errorMessage = error instanceof Error ? error.message : String(error)
         Logging.log('ChatAgent', `Execution failed: ${errorMessage}`, 'error')
-        this.eventEmitter.emitError(errorMessage)
+        this.eventEmitter.error(errorMessage)
       }
       throw error
     }
@@ -137,9 +125,6 @@ export class ChatAgent {
       throw new Error('No tabs available for context extraction')
     }
     
-    // Calculate per-tab character budget
-    const perTabBudget = Math.floor(ChatAgent.DEFAULT_CHARS_PER_TAB / Math.max(1, pages.length))
-    
     // Extract content from each tab
     const tabs = await Promise.all(
       pages.map(async page => {
@@ -148,11 +133,16 @@ export class ChatAgent {
           section.content || section.text || ''
         ).join('\n') || 'No content found'
         
+        // Simple truncation for initial implementation
+        const truncatedText = text.length > ChatAgent.DEFAULT_CHARS_PER_TAB 
+          ? text.substring(0, ChatAgent.DEFAULT_CHARS_PER_TAB) 
+          : text
+        
         return {
           id: page.tabId,
           url: page.url(),
           title: await page.title(),
-          text: this._smartTruncate(text, perTabBudget)
+          text: truncatedText
         }
       })
     )
@@ -163,23 +153,6 @@ export class ChatAgent {
     }
   }
 
-  /**
-   * Smart truncation that preserves document structure
-   */
-  private _smartTruncate(text: string, maxLength: number): string {
-    if (text.length <= maxLength) return text
-    
-    // Try to break at paragraph boundary
-    const truncated = text.substring(0, maxLength)
-    const lastNewline = truncated.lastIndexOf('\n')
-    
-    // If we found a newline in the last 20% of the text, use it
-    if (lastNewline > maxLength * 0.8) {
-      return truncated.substring(0, lastNewline)
-    }
-    
-    return truncated
-  }
 
   /**
    * Initialize chat session with system prompt and user query
@@ -200,7 +173,7 @@ export class ChatAgent {
   /**
    * Stream LLM response with or without tools
    */
-  private async _streamLLM(opts: { tools: boolean }): Promise<AIMessage> {
+  private async _streamLLM(opts: { tools: boolean }): Promise<void> {
     const llm = await this.executionContext.getLLM({ temperature: 0.3 })
     
     // Only bind tools in Pass 2
@@ -211,11 +184,15 @@ export class ChatAgent {
     // Get current messages
     const messages = this.messageManager.getMessages()
     
+    // Start streaming (creates message segment for direct streaming)
+    this.eventEmitter.startThinking()
+    
     // Stream the response
     const stream = await llmToUse.stream(messages)
     
     // Accumulate chunks for final message
     const chunks: AIMessageChunk[] = []
+    let fullContent = ''
     
     // Stream directly to UI without "thinking" state
     for await (const chunk of stream) {
@@ -224,17 +201,19 @@ export class ChatAgent {
       
       // Direct streaming to UI
       if (chunk.content) {
-        this.eventEmitter.emitAgentThinking(chunk.content as string)
+        fullContent += chunk.content
+        this.eventEmitter.streamThoughtDuringThinking(chunk.content as string)
       }
     }
     
-    // Accumulate final message
+    // Accumulate final message for history
     const finalMessage = this._accumulateMessage(chunks)
     
-    // Add to message history
-    this.messageManager.addAI(finalMessage)
+    // Finish the streaming message
+    this.eventEmitter.finishThinking(fullContent)
     
-    return finalMessage
+    // Add to message history
+    this.messageManager.addAI(finalMessage.content as string || '')
   }
 
   /**
@@ -256,30 +235,4 @@ export class ChatAgent {
     })
   }
 
-  /**
-   * Check if the response is confident enough to stop at Pass 1
-   */
-  private _isConfident(message: AIMessage): boolean {
-    const content = (message.content as string) || ''
-    
-    // Check for uncertainty indicators that suggest visual/scroll needs
-    const uncertainPhrases = [
-      'cannot see',
-      'can\'t see', 
-      'need to scroll',
-      'need to view',
-      'unable to see',
-      'not visible',
-      'below the fold',
-      'screenshot',
-      'visual'
-    ]
-    
-    const hasUncertainty = uncertainPhrases.some(phrase => 
-      content.toLowerCase().includes(phrase)
-    )
-    
-    // Consider confident if substantive answer without uncertainty
-    return content.length > 50 && !hasUncertainty
-  }
 }

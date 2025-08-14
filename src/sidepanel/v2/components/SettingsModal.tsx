@@ -216,22 +216,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             </Button>
           </div>
 
-          {/* Chat Mode */}
-          <div className="flex items-center justify-between px-4 py-2 rounded-xl border border-border/50 bg-card">
-            <div>
-              <p className="text-xs font-medium text-foreground">Chat Mode (Q&A)</p>
-              <p className="text-xs text-muted-foreground">Fast responses for page questions</p>
-            </div>
-            <Button
-              onClick={() => setChatMode(!chatMode)}
-              variant="ghost"
-              size="sm"
-              className={`h-7 px-2 text-xs ${chatMode ? 'text-foreground' : 'text-muted-foreground'}`}
-              aria-label={`${chatMode ? 'Disable' : 'Enable'} chat mode`}
-            >
-              {chatMode ? 'On' : 'Off'}
-            </Button>
-          </div>
+          
           </div>
 
           

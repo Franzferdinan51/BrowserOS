@@ -58,7 +58,7 @@ describe('KlavisAPIClient', () => {
   })
 
   it('tests that API errors are handled properly', async () => {
-    ;(global.fetch as any).mockResolvedValueOnce({
+    (global.fetch as any).mockResolvedValueOnce({
       ok: false,
       status: 401,
       statusText: 'Unauthorized',

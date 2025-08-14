@@ -11,6 +11,8 @@ import { MessageType } from '@/lib/types/messaging'
 import { cn } from '@/sidepanel/lib/utils'
 import { LoadingPawTrail } from './ui/Icons'
 import { BrowserOSProvidersConfig, BrowserOSProvider } from '@/lib/llm/settings/browserOSTypes'
+import { ModeToggle } from './ModeToggle'
+// Tailwind classes used in ModeToggle; no separate CSS import
 
 
 interface ChatInputProps {
@@ -218,7 +220,7 @@ export function ChatInput({ isConnected, isProcessing }: ChatInputProps) {
     textareaRef.current?.focus()
   }
 
-  const handleTabSelected = (tabId: number) => {
+  const handleTabSelected = (_tabId: number) => {
     // Remove trailing '@' that triggered the selector
     setInput(prev => prev.replace(/@$/, ''))
   }
@@ -246,29 +248,27 @@ export function ChatInput({ isConnected, isProcessing }: ChatInputProps) {
     if (!connectionOk) return 'Disconnected'
     if (!providerOk) return 'Provider error'
     if (isProcessing) return 'Task running…'
-    return 'Ask me anything...'
+    return chatMode ? 'Ask about this page...' : 'Ask me anything...'
   }
   
   const getHintText = () => {
     if (!connectionOk) return 'Waiting for connection'
     if (!providerOk) return 'Provider not configured'
     if (isProcessing) return 'Task running… Press Esc to cancel'
-    return 'Press Enter to send • @ to select tabs'
+    return chatMode 
+      ? 'Chat mode: Quick Q&A • @ to select tabs • Press Enter to send'
+      : 'Browse mode: Automation • Press Enter to send'
   }
 
-  const getLoadingIndicator = () => {
-    if (!uiConnected || isProcessing) {
-      return <LoadingPawTrail />
-    }
-    return null
-  }
   
   return (
     <div className="relative bg-[hsl(var(--header))] border-t border-border/50 px-2 py-1 flex-shrink-0 overflow-hidden">
       
-      
-      {/* Select Tabs Button (appears when '@' is present) */}
-      
+      {/* Mode Toggle - top left, above input */}
+      <div className="px-2 mb-2">
+        <ModeToggle />
+      </div>
+
       {/* Input container */}
       <div className="relative">
         {/* Toggle Select Tabs Button */}
@@ -332,7 +332,9 @@ export function ChatInput({ isConnected, isProcessing }: ChatInputProps) {
 
         <form onSubmit={handleSubmit} className="w-full px-2" role="form" aria-label="Chat input form">
           <div className="relative flex items-end w-full transition-all duration-300 ease-out">
-            <Textarea
+            {/* Textarea grows to fill available width */}
+            <div className="relative flex-1">
+              <Textarea
               ref={textareaRef}
               value={input}
               onChange={handleInputChange}
@@ -355,18 +357,19 @@ export function ChatInput({ isConnected, isProcessing }: ChatInputProps) {
               aria-describedby="input-hint"
                aria-invalid={!uiConnected}
                aria-disabled={!uiConnected}
-            />
-            
-            <Button
-              type="submit"
-              disabled={!uiConnected || isProcessing || !input.trim()}
-              size="sm"
-              className="absolute right-3 bottom-3 h-8 w-8 p-0 rounded-full bg-[hsl(var(--brand))] hover:bg-[hsl(var(--brand))]/90 text-white shadow-lg flex items-center justify-center"
-              variant={'default'}
-              aria-label={'Send message'}
-            >
-              <img src="assets/arrow_upward_alt.svg" alt="" aria-hidden="true" className="w-6 h-6 block pointer-events-none select-none" />
-            </Button>
+              />
+
+              <Button
+                type="submit"
+                disabled={!uiConnected || isProcessing || !input.trim()}
+                size="sm"
+                className="absolute right-3 bottom-3 h-8 w-8 p-0 rounded-full bg-[hsl(var(--brand))] hover:bg-[hsl(var(--brand))]/90 text-white shadow-lg flex items-center justify-center"
+                variant={'default'}
+                aria-label={'Send message'}
+              >
+                <img src="assets/arrow_upward_alt.svg" alt="" aria-hidden="true" className="w-6 h-6 block pointer-events-none select-none" />
+              </Button>
+            </div>
           </div>
         </form>
         

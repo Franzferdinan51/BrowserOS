@@ -706,17 +706,6 @@ export class BrowserAgent {
   }
 
   /**
-   * Detect if the agent is stuck in a loop by checking for repeated patterns
-   * Enhanced to detect:
-   * 1. Repeated AI messages
-   * 2. Repeated tool call sequences
-   * 3. Identical consecutive tool calls with same arguments
-   * 
-   * @param lookback - Number of recent messages to check (default: 10)
-   * @param messageThreshold - Number of times a message must appear to be considered a loop (default: 3)
-   * @returns true if a loop is detected
-   */
-  /**
    * Detect if the agent is stuck in a loop by checking for repeated messages
    * @param lookback - Number of recent messages to check (default: 8)
    * @param threshold - Number of times a message must appear to be considered a loop (default: 4)

@@ -8,12 +8,16 @@ import { invokeWithRetry } from '@/lib/utils/retryable'
 import { PubSub } from '@/lib/pubsub'
 import { TokenCounter } from '@/lib/utils/TokenCounter'
 import { Logging } from '@/lib/utils/Logging'
+import { DFSParser } from './DFSParser'
+import { DFSExtractionOptionsSchema, type DFSExtractionOptions } from './types'
+import { getBrowserOSAdapter } from '@/lib/browser/BrowserOSAdapter'
 
 // Input schema for extraction
 const ExtractInputSchema = z.object({
   task: z.string(),  // What to extract (e.g., "Extract all product prices")
   tab_id: z.number(),  // Tab ID to extract from
-  extract_type: z.enum(['links', 'text'])  // Type of content to extract
+  extract_type: z.enum(['links', 'text', 'semantic', 'products', 'forms', 'navigation', 'main_content']),  // Type of content to extract
+  options: DFSExtractionOptionsSchema.optional()  // Advanced options for semantic extraction
 })
 
 // Output schema for extracted data
@@ -29,7 +33,7 @@ type ExtractedData = z.infer<typeof ExtractedDataSchema>
 export function createExtractTool(executionContext: ExecutionContext): DynamicStructuredTool {
   return new DynamicStructuredTool({
     name: 'extract_tool',
-    description: 'Extract specific information from a web page using AI. Supports extracting text or links based on a task description.',
+    description: 'Extract specific information from a web page using AI. Supports legacy text/links extraction and new semantic extraction using accessibility tree parsing for products, forms, navigation, and main content.',
     schema: ExtractInputSchema,
     func: async (args: ExtractInput): Promise<string> => {
       try {
@@ -44,18 +48,18 @@ export function createExtractTool(executionContext: ExecutionContext): DynamicSt
         
         // Get raw content based on extract_type
         let rawContent: string
-        if (args.extract_type === 'text') {
+        if (['semantic', 'products', 'forms', 'navigation', 'main_content'].includes(args.extract_type)) {
+          rawContent = await performSemanticExtraction(args, args.tab_id)
+        } else if (args.extract_type === 'text') {
           const textSnapshot = await page.getTextSnapshot()
-          // Convert sections to readable content
-          rawContent = textSnapshot.sections && textSnapshot.sections.length > 0
+          rawContent = textSnapshot?.sections && textSnapshot.sections.length > 0
             ? textSnapshot.sections.map((section: any) => 
                 section.content || section.text || JSON.stringify(section)
               ).join('\n')
             : 'No text content found'
         } else {
           const linksSnapshot = await page.getLinksSnapshot()
-          // Convert sections to readable content
-          rawContent = linksSnapshot.sections && linksSnapshot.sections.length > 0
+          rawContent = linksSnapshot?.sections && linksSnapshot.sections.length > 0
             ? linksSnapshot.sections.map((section: any) => 
                 section.content || section.text || JSON.stringify(section)
               ).join('\n')
@@ -113,4 +117,28 @@ export function createExtractTool(executionContext: ExecutionContext): DynamicSt
       }
     }
   })
+}
+
+// New semantic extraction method
+async function performSemanticExtraction(args: ExtractInput, tabId: number): Promise<string> {
+  const browserOSAdapter = getBrowserOSAdapter()
+  const accessibilityTree = await browserOSAdapter.getAccessibilityTree(tabId)
+  
+  const parser = new DFSParser(accessibilityTree)
+  
+  const options: DFSExtractionOptions = {
+    target: args.extract_type as any,
+    task: args.task,
+    maxDepth: args.options?.maxDepth || 5,
+    preserveHierarchy: args.options?.preserveHierarchy ?? true,
+    includeInteractive: args.options?.includeInteractive ?? true,
+    includeText: args.options?.includeText ?? true,
+    minTextLength: args.options?.minTextLength || 3,
+    includeHidden: args.options?.includeHidden || false,
+    includeRoles: args.options?.includeRoles,
+    excludeRoles: args.options?.excludeRoles || ['banner', 'contentinfo', 'complementary', 'definition', 'note']
+  }
+  
+  const extractedContent = await parser.extractContent(options)
+  return extractedContent.toStructuredText()
 }

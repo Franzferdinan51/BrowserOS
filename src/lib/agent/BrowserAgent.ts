@@ -64,6 +64,8 @@ import { createStorageTool } from '@/lib/tools/utils/StorageTool';
 import { createExtractTool } from '@/lib/tools/extraction/ExtractTool';
 import { createResultTool } from '@/lib/tools/result/ResultTool';
 import { createHumanInputTool } from '@/lib/tools/utils/HumanInputTool';
+import { createDateTool } from '@/lib/tools/utility/DateTool';
+import { createMCPTool } from '@/lib/tools/mcp/MCPTool';
 import { generateSystemPrompt, generateSingleTurnExecutionPrompt } from './BrowserAgent.prompt';
 import { AIMessage, AIMessageChunk } from '@langchain/core/messages';
 import { PLANNING_CONFIG } from '@/lib/tools/planning/PlannerTool.config';
@@ -286,12 +288,13 @@ export class BrowserAgent {
     this.toolManager.register(createStorageTool(this.executionContext));
     this.toolManager.register(createExtractTool(this.executionContext));
     this.toolManager.register(createHumanInputTool(this.executionContext));
+    this.toolManager.register(createDateTool(this.executionContext));
     
     // Result tool
     this.toolManager.register(createResultTool(this.executionContext));
     
     // MCP tool for external integrations
-    // this.toolManager.register(createMCPTool(this.executionContext));
+    this.toolManager.register(createMCPTool(this.executionContext));
     
     // Register classification tool last with all tool descriptions
     const toolDescriptions = this.toolManager.getDescriptions();
@@ -507,7 +510,7 @@ export class BrowserAgent {
     // This method encapsulates the streaming logic
     const llmResponse = await this._invokeLLMWithStreaming();
 
-    // console.log(`K tokens:\n${JSON.stringify(llmResponse, null, 2)}`)
+    console.log(`K tokens:\n${JSON.stringify(llmResponse, null, 2)}`)
 
     const result: SingleTurnResult = {
       doneToolCalled: false,

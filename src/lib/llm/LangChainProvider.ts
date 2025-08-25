@@ -71,6 +71,16 @@ export class LangChainProvider {
     const llm = this._createLLMFromProvider(provider, options)
     llmCache.set(cacheKey, llm)
     
+    // Log metrics about the LLM configuration
+    const maxTokens = this._calculateMaxTokens(provider, options?.maxTokens)
+    await Logging.logMetric('llm.created', {
+      provider: provider.name,
+      provider_type: provider.type,
+      model_name: provider.modelId || this._getDefaultModelForProvider(provider.type),
+      max_tokens: maxTokens,
+      temperature: options?.temperature ?? provider.modelConfig?.temperature ?? DEFAULT_TEMPERATURE,
+    })
+    
     return llm
   }
   
@@ -138,6 +148,26 @@ export class LangChainProvider {
     this.currentProvider = null
   }
   
+  // Helper to get default model for provider type
+  private _getDefaultModelForProvider(type: string): string {
+    switch (type) {
+      case 'browseros':
+        return DEFAULT_NXTSCAPE_MODEL
+      case 'openai':
+      case 'openai_compatible':
+      case 'openrouter':
+      case 'custom':
+        return DEFAULT_OPENAI_MODEL
+      case 'anthropic':
+        return DEFAULT_ANTHROPIC_MODEL
+      case 'google_gemini':
+        return DEFAULT_GEMINI_MODEL
+      case 'ollama':
+        return DEFAULT_OLLAMA_MODEL
+      default:
+        return 'unknown'
+    }
+  }
   
   /**
    * Patches token counting methods on any chat model for ultra-fast approximation.

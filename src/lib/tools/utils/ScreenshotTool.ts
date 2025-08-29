@@ -4,9 +4,12 @@ import { ExecutionContext } from '@/lib/runtime/ExecutionContext'
 import { Logging } from '@/lib/utils/Logging'
 import { toolSuccess, toolError } from '@/lib/tools/Tool.interface'
 import { PubSub } from '@/lib/pubsub'
+import { SCREENSHOT_SIZES, type ScreenshotSizeKey } from '@/lib/browser/BrowserOSAdapter'
 
 // Input schema for the screenshot tool
-const ScreenshotToolInputSchema = z.object({})  // No parameters needed
+const ScreenshotToolInputSchema = z.object({
+  size: z.enum(['small', 'medium', 'large']).optional()  // Optional size parameter
+})
 
 type ScreenshotToolInput = z.infer<typeof ScreenshotToolInputSchema>;
 
@@ -14,6 +17,11 @@ export function createScreenshotTool(executionContext: ExecutionContext): Dynami
   return new DynamicStructuredTool({
     name: 'screenshot_tool',
     description: `Capture a screenshot of the current page. Use liberally - screenshots are fast and free!
+
+SIZE OPTIONS:
+• small (256px): Low detail, minimal token usage - for quick checks
+• medium (512px): Balanced quality and token usage - DEFAULT
+• large (1028px): High detail - for complex pages or detailed analysis
 
 USE FOR DECISION-MAKING:
 • Choosing between multiple options (products, buttons, links)
@@ -29,7 +37,7 @@ USE FOR DEBUGGING:
 
 Screenshots help you see what's on the page and make better decisions.`,
     schema: ScreenshotToolInputSchema,
-    func: async (_args: ScreenshotToolInput): Promise<string> => {
+    func: async (args: ScreenshotToolInput): Promise<string> => {
       try {
         // Check if model has enough tokens for screenshots
         const maxTokens = executionContext.messageManager.getMaxTokens()
@@ -45,10 +53,23 @@ Screenshots help you see what's on the page and make better decisions.`,
           ))
         }
         
-        // TODO(nithin): Add support for multiple screenshot sizes (256x256, 512x512)
-        // Currently only supports 1024x1024. Smaller sizes would use less tokens.
+        // Determine screenshot size based on user input or smart defaults
+        let selectedSize: ScreenshotSizeKey
+        if (args.size) {
+          selectedSize = args.size
+        } else {
+          // Smart default: use smaller size for low-token models
+          selectedSize = maxTokens < 200000 ? 'small' : 'medium'
+        }
         
-        executionContext.getPubSub().publishMessage(PubSub.createMessage(`Capturing screenshot of current page`, 'thinking'))
+        const pixelSize = SCREENSHOT_SIZES[selectedSize]
+        Logging.log('ScreenshotTool', 
+          `Using ${selectedSize} screenshot (${pixelSize}px) for model with ${maxTokens} tokens`, 
+          'info')
+        
+        executionContext.getPubSub().publishMessage(
+          PubSub.createMessage(`Capturing ${selectedSize} screenshot (${pixelSize}px)`, 'thinking')
+        )
 
         const page = await executionContext.browserContext.getCurrentPage()
         if (!page) {
@@ -57,19 +78,23 @@ Screenshots help you see what's on the page and make better decisions.`,
           return JSON.stringify(toolError(error))
         }
 
-        const screenshotDataUrl = await page.takeScreenshot()
+        const screenshotDataUrl = await page.takeScreenshot(selectedSize)
         if (!screenshotDataUrl) {
           const error = 'Failed to capture screenshot - no data returned'
           Logging.log('ScreenshotTool', error, 'error')
           return JSON.stringify(toolError(error))
         }
         
-        Logging.log('ScreenshotTool', `Screenshot captured successfully (${screenshotDataUrl.length} bytes)`, 'info')
+        Logging.log('ScreenshotTool', 
+          `${selectedSize} screenshot captured successfully (${screenshotDataUrl.length} bytes)`, 
+          'info')
         
         // Return success with the actual screenshot data so LLM can see it
         // Include the screenshot in the output as a JSON object
         const result = {
-          message: 'Captured screenshot of the page.',
+          message: `Captured ${selectedSize} screenshot (${pixelSize}px) of the page.`,
+          size: selectedSize,
+          pixels: pixelSize,
           screenshot: screenshotDataUrl
         }
         return JSON.stringify(toolSuccess(JSON.stringify(result)))

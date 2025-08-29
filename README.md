@@ -118,6 +118,11 @@ We'd love your help making BrowserOS better!
 
 BrowserOS is open source under the [AGPL-3.0 license](LICENSE).
 
+## Stargazers
+Thank you to all our supporters!
+
+[![Star History Chart](https://api.star-history.com/svg?repos=browseros-ai/BrowserOS&type=Date)](https://www.star-history.com/#browseros-ai/BrowserOS&Date)
+
 ## 
 
 <p align="center">

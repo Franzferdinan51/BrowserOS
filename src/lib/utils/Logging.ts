@@ -1,5 +1,5 @@
 import { MessageType } from '@/lib/types/messaging'
-import { parsePortName } from '@/background/utils/portUtils'
+import { PortName } from '@/lib/runtime/PortMessaging'
 import { isDevelopmentMode } from '@/config'
 import { getBrowserOSAdapter } from '@/lib/browser/BrowserOSAdapter'
 import { z } from 'zod'
@@ -106,20 +106,10 @@ export class Logging {
     
     // In development mode, send to options page
     if (isDevelopmentMode()) {
-      // Look for any options page port
-      let optionsPort: chrome.runtime.Port | undefined
-      let optionsPortName: string | undefined
+      // Look for options page port
+      const optionsPort = this.connectedPorts.get(PortName.OPTIONS_TO_BACKGROUND)
       
-      for (const [name, port] of this.connectedPorts.entries()) {
-        const portInfo = parsePortName(name)
-        if (portInfo.type === 'options') {
-          optionsPort = port
-          optionsPortName = name
-          break
-        }
-      }
-      
-      if (optionsPort && optionsPortName) {
+      if (optionsPort) {
         try {
           // Check if port is still connected by accessing a property
           // Chrome will throw if the port is disconnected
@@ -133,11 +123,11 @@ export class Logging {
             sentViaPort = true
           } else {
             // Port is stale, remove it
-            this.unregisterPort(optionsPortName)
+            this.unregisterPort(PortName.OPTIONS_TO_BACKGROUND)
           }
         } catch (error) {
           // Port is disconnected or stale, remove it and log the issue
-          this.unregisterPort(optionsPortName!)
+          this.unregisterPort(PortName.OPTIONS_TO_BACKGROUND)
           
           // Only log port errors for non-heartbeat messages to avoid spam
           if (level !== 'info' || !message.includes('heartbeat')) {

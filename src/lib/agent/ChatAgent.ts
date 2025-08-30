@@ -6,9 +6,9 @@ import { createScrollTool } from '@/lib/tools/navigation/ScrollTool'
 import { generateSystemPrompt, generatePageContextMessage, generateTaskPrompt } from './ChatAgent.prompt'
 import { AIMessage, AIMessageChunk } from '@langchain/core/messages'
 import { PubSub } from '@/lib/pubsub'
-import { PubSubChannel } from '@/lib/pubsub/PubSubChannel'
 import { AbortError } from '@/lib/utils/Abortable'
 import { Logging } from '@/lib/utils/Logging'
+import { Subscription } from '@/lib/pubsub/types'
 
 // Type definitions
 interface ExtractedPageContext {
@@ -33,6 +33,7 @@ export class ChatAgent {
   
   private readonly executionContext: ExecutionContext
   private readonly toolManager: ToolManager
+  private statusSubscription?: Subscription  // Subscription to execution status events
   
   // State tracking for tab context caching
   private lastExtractedTabIds: Set<number> | null = null
@@ -41,6 +42,7 @@ export class ChatAgent {
     this.executionContext = executionContext
     this.toolManager = new ToolManager(executionContext)
     this._registerTools()
+    this._subscribeToExecutionStatus()
   }
 
   // Getters for context components
@@ -48,7 +50,7 @@ export class ChatAgent {
     return this.executionContext.messageManager
   }
 
-  private get pubsub(): PubSubChannel {
+  private get pubsub(): PubSub {
     return this.executionContext.getPubSub()
   }
 
@@ -73,10 +75,29 @@ export class ChatAgent {
   }
 
   /**
-   * Cleanup method (currently unused but kept for interface compatibility)
+   * Subscribe to execution status events and handle cancellation
+   */
+  private _subscribeToExecutionStatus(): void {
+    this.statusSubscription = this.pubsub.subscribe((event) => {
+      if (event.type === 'execution-status') {
+        const { status } = event.payload
+        
+        if (status === 'cancelled') {
+          this.pubsub.publishMessage(PubSub.createMessageWithId('pause_message_id','✋ Task paused. To continue this task, just type your next request OR use 🔄 to start a new task!', 'assistant'))
+          this.executionContext.cancelExecution(true)
+        }
+      }
+    })
+  }
+
+  /**
+   * Cleanup method to properly unsubscribe when agent is being destroyed
    */
   public cleanup(): void {
-    // No cleanup needed currently
+    if (this.statusSubscription) {
+      this.statusSubscription.unsubscribe()
+      this.statusSubscription = undefined
+    }
   }
 
   /**
@@ -152,6 +173,12 @@ export class ChatAgent {
         this.pubsub.publishMessage(PubSub.createMessage(`Error: ${errorMessage}`, 'error'))
       }
       throw error
+    } finally {
+      // Cleanup status subscription
+      if (this.statusSubscription) {
+        this.statusSubscription.unsubscribe()
+        this.statusSubscription = undefined
+      }
     }
   }
 

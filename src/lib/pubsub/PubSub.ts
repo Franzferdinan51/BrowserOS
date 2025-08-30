@@ -1,169 +1,122 @@
-import { PubSubChannel } from './PubSubChannel'
-import { Logging } from '@/lib/utils/Logging'
-import { Message } from './types'
+import { Message, PubSubEvent, SubscriptionCallback, Subscription, ExecutionStatus, HumanInputRequest, HumanInputResponse } from './types'
 
 /**
- * PubSub manages scoped PubSub channels for execution isolation.
- * Each execution gets its own channel to prevent message cross-talk.
+ * Core pub-sub implementation for message passing
+ * Handles publish/subscribe pattern with message buffering
  */
 export class PubSub {
-  private static channels: Map<string, PubSubChannel> = new Map()
-  private static cleanupTimers: Map<string, NodeJS.Timeout> = new Map()
+  private static instance: PubSub | null = null
+  private subscribers: Set<SubscriptionCallback> = new Set()
+  private messageBuffer: PubSubEvent[] = []  // Simple buffer for replay
   
-  // Channel cleanup timeout (10 minutes)
-  private static readonly CHANNEL_CLEANUP_TIMEOUT = 10 * 60 * 1000
-  
-  /**
-   * Get or create a PubSub channel for an execution
-   * @param executionId - The unique execution identifier
-   * @returns The scoped PubSub channel
-   */
-  static getChannel(executionId: string): PubSubChannel {
-    // Return existing channel if available
-    let channel = PubSub.channels.get(executionId)
-    if (channel) {
-      // Clear any pending cleanup timer
-      PubSub.clearCleanupTimer(executionId)
-      return channel
+  private readonly MAX_BUFFER_SIZE = 200  // Max messages to keep
+
+  private constructor() {}
+
+  // Singleton pattern
+  static getInstance(): PubSub {
+    if (!PubSub.instance) {
+      PubSub.instance = new PubSub()
     }
-    
-    // Create new channel
-    channel = new PubSubChannel(executionId)
-    PubSub.channels.set(executionId, channel)
-    
-    Logging.log('PubSub', `Created channel for execution ${executionId} (total: ${PubSub.channels.size})`)
-    
-    return channel
+    return PubSub.instance
   }
-  
-  /**
-   * Delete a PubSub channel
-   * @param executionId - The execution identifier
-   * @param immediate - If true, delete immediately without cleanup timer
-   */
-  static deleteChannel(executionId: string, immediate: boolean = false): void {
-    if (immediate) {
-      PubSub.performChannelCleanup(executionId)
-    } else {
-      // Schedule cleanup with timeout (allows for reconnection)
-      PubSub.scheduleCleanup(executionId)
+
+  // Publish a message
+  publishMessage(message: Message): void {
+    const event: PubSubEvent = {
+      type: 'message',
+      payload: message
     }
+    this._publish(event)
   }
-  
-  /**
-   * Perform actual channel cleanup
-   * @private
-   */
-  private static performChannelCleanup(executionId: string): void {
-    const channel = PubSub.channels.get(executionId)
-    if (!channel) {
-      return
+
+  // Publish execution status with optional message
+  publishExecutionStatus(status: 'running' | 'done' | 'cancelled' | 'error', message?: string): void {
+    const event: PubSubEvent = {
+      type: 'execution-status',
+      payload: {
+        status,
+        ts: Date.now(),
+        ...(message && { message })
+      }
     }
-    
-    // Destroy the channel
-    channel.destroy()
-    
-    // Remove from map
-    PubSub.channels.delete(executionId)
-    
-    // Clear any cleanup timer
-    PubSub.clearCleanupTimer(executionId)
-    
-    Logging.log('PubSub', `Deleted channel for execution ${executionId} (remaining: ${PubSub.channels.size})`)
+    this._publish(event)
   }
-  
-  /**
-   * Schedule channel cleanup after timeout
-   * @private
-   */
-  private static scheduleCleanup(executionId: string): void {
-    // Clear any existing timer
-    PubSub.clearCleanupTimer(executionId)
-    
-    // Schedule new cleanup
-    const timer = setTimeout(() => {
-      Logging.log('PubSub', `Auto-cleanup triggered for channel ${executionId}`)
-      PubSub.performChannelCleanup(executionId)
-    }, PubSub.CHANNEL_CLEANUP_TIMEOUT)
-    
-    PubSub.cleanupTimers.set(executionId, timer)
-  }
-  
-  /**
-   * Clear cleanup timer for a channel
-   * @private
-   */
-  private static clearCleanupTimer(executionId: string): void {
-    const timer = PubSub.cleanupTimers.get(executionId)
-    if (timer) {
-      clearTimeout(timer)
-      PubSub.cleanupTimers.delete(executionId)
+
+  // Publish human input request
+  publishHumanInputRequest(request: HumanInputRequest): void {
+    const event: PubSubEvent = {
+      type: 'human-input-request',
+      payload: request
     }
+    this._publish(event)
   }
-  
-  /**
-   * Check if a channel exists
-   * @param executionId - The execution identifier
-   * @returns True if channel exists
-   */
-  static hasChannel(executionId: string): boolean {
-    return PubSub.channels.has(executionId)
+
+  // Publish human input response (called from UI)
+  publishHumanInputResponse(response: HumanInputResponse): void {
+    const event: PubSubEvent = {
+      type: 'human-input-response',
+      payload: response
+    }
+    this._publish(event)
   }
-  
-  /**
-   * Get all active channel IDs
-   * @returns Array of execution IDs with active channels
-   */
-  static getActiveChannelIds(): string[] {
-    return Array.from(PubSub.channels.keys())
-  }
-  
-  /**
-   * Get statistics about channels
-   */
-  static getStats(): {
-    totalChannels: number
-    channelIds: string[]
-    pendingCleanups: number
-  } {
+
+  // Subscribe to events
+  subscribe(callback: SubscriptionCallback): Subscription {
+    this.subscribers.add(callback)
+    
+    // Send buffered messages to new subscriber
+    this.messageBuffer.forEach(event => {
+      try {
+        callback(event)
+      } catch (error) {
+        console.error('PubSub: Error replaying buffered event', error)
+      }
+    })
+
     return {
-      totalChannels: PubSub.channels.size,
-      channelIds: Array.from(PubSub.channels.keys()),
-      pendingCleanups: PubSub.cleanupTimers.size
+      unsubscribe: () => {
+        this.subscribers.delete(callback)
+      }
     }
   }
-  
-  /**
-   * Delete all channels (for cleanup/testing)
-   */
-  static deleteAllChannels(): void {
-    // Clear all timers
-    for (const timer of PubSub.cleanupTimers.values()) {
-      clearTimeout(timer)
-    }
-    PubSub.cleanupTimers.clear()
-    
-    // Destroy all channels
-    for (const [id, channel] of PubSub.channels) {
-      channel.destroy()
-    }
-    PubSub.channels.clear()
-    
-    Logging.log('PubSub', 'Deleted all channels')
+
+  // Get current buffer
+  getBuffer(): PubSubEvent[] {
+    return [...this.messageBuffer]
   }
-  
-  // ============ Helper methods for creating messages ============
-  
-  /**
-   * Helper to generate a unique message ID
-   */
+
+  // Clear buffer
+  clearBuffer(): void {
+    this.messageBuffer = []
+  }
+
+  // Internal publish method
+  private _publish(event: PubSubEvent): void {
+    // Add to buffer
+    this.messageBuffer.push(event)
+    
+    // Trim buffer if too large
+    if (this.messageBuffer.length > this.MAX_BUFFER_SIZE) {
+      this.messageBuffer.shift()
+    }
+
+    // Notify all subscribers
+    this.subscribers.forEach(callback => {
+      try {
+        callback(event)
+      } catch (error) {
+        console.error('PubSub: Subscriber error', error)
+      }
+    })
+  }
+
+  // Helper to generate a unique message ID
   static generateId(prefix: string = 'msg'): string {
     return `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
   }
 
-  /**
-   * Helper to create message with auto-generated ID
-   */
+  // Helper to create message with auto-generated ID
   static createMessage(content: string, role: Message['role'] = 'thinking'): Message {
     const msgId = PubSub.generateId(`msg_${role}`)
     return {
@@ -174,9 +127,7 @@ export class PubSub {
     }
   }
   
-  /**
-   * Helper to create message with specific ID
-   */
+  // Helper to create message with specific ID (for cases where ID matters)
   static createMessageWithId(msgId: string, content: string, role: Message['role'] = 'thinking'): Message {
     return {
       msgId,

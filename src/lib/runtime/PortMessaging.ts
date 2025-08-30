@@ -2,17 +2,16 @@ import { MessageType } from '@/lib/types/messaging';
 import { z } from 'zod';
 
 /**
- * Port name prefixes for different extension contexts
- * Actual port names follow patterns:
- * - sidepanel:<tabId>:<executionId>
- * - newtab:<executionId>
- * - options:<executionId>
+ * Port connection names
  */
-export enum PortPrefix {
-  OPTIONS = 'options',
-  SIDEPANEL = 'sidepanel',
-  NEWTAB = 'newtab'
+export enum PortName {
+  OPTIONS_TO_BACKGROUND = 'options-to-background',
+  SIDEPANEL_TO_BACKGROUND = 'sidepanel-to-background',
+  NEWTAB_TO_BACKGROUND = 'newtab-to-background'
 }
+
+// Create a zod enum for PortName
+export const PortNameSchema = z.nativeEnum(PortName);
 
 /**
  * Port message structure
@@ -34,7 +33,7 @@ export class PortMessaging {
   private listeners: Map<MessageType, Array<(payload: unknown, messageId?: string) => void>> = new Map();
   private connectionListeners: Array<(connected: boolean) => void> = [];
   private connected = false;
-  private currentPortName: string | null = null;  // Dynamic port names
+  private currentPortName: PortName | null = null;
   private heartbeatInterval: number | null = null;
   private heartbeatIntervalMs = 5000;  // Send heartbeat every 5 seconds
   private autoReconnect = false;
@@ -55,11 +54,11 @@ export class PortMessaging {
 
   /**
    * Connects to a port with the specified name
-   * @param portName - Dynamic port name (e.g., "sidepanel:123:exec_456")
+   * @param portName - Name of the port to connect to
    * @param enableAutoReconnect - Whether to automatically reconnect on disconnect
    * @returns true if connection successful
    */
-  public connect(portName: string, enableAutoReconnect: boolean = false): boolean {
+  public connect(portName: PortName, enableAutoReconnect: boolean = false): boolean {
     try {
       this.currentPortName = portName;
       this.autoReconnect = enableAutoReconnect;

@@ -73,8 +73,7 @@ import { AbortError } from '@/lib/utils/Abortable';
 import { GlowAnimationService } from '@/lib/services/GlowAnimationService';
 import { NarratorService } from '@/lib/services/NarratorService';
 import { PubSub } from '@/lib/pubsub'; // For static helper methods
-import { PubSubChannel } from '@/lib/pubsub/PubSubChannel';
-import { HumanInputResponse, PubSubEvent } from '@/lib/pubsub/types';
+import { HumanInputResponse } from '@/lib/pubsub/types';
 import { Logging } from '@/lib/utils/Logging';
 import { jsonParseToolOutput } from '@/lib/utils/utils';
 
@@ -145,7 +144,7 @@ export class BrowserAgent {
     return this.executionContext.messageManager; 
   }
   
-  private get pubsub(): PubSubChannel { 
+  private get pubsub(): PubSub { 
     return this.executionContext.getPubSub(); 
   }
 
@@ -887,7 +886,7 @@ export class BrowserAgent {
     }
     
     // Subscribe to human input responses
-    const subscription = this.pubsub.subscribe((event: PubSubEvent) => {
+    const subscription = this.pubsub.subscribe((event) => {
       if (event.type === 'human-input-response') {
         const response = event.payload as HumanInputResponse;
         if (response.requestId === requestId) {

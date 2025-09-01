@@ -92,6 +92,11 @@ export function TaskManagerDropdown({ content, className, isEditable = false, on
       )
       setLocalTasks(updatedTasks)
       onTasksChange?.(updatedTasks)
+    } else if (editingTaskId) {
+      // Delete task if content is empty
+      const updatedTasks = localTasks.filter(task => task.id !== editingTaskId)
+      setLocalTasks(updatedTasks)
+      onTasksChange?.(updatedTasks)
     }
     setEditingTaskId(null)
     setEditText('')
@@ -116,7 +121,7 @@ export function TaskManagerDropdown({ content, className, isEditable = false, on
     const newTask = {
       id: `task-${Date.now()}`,
       status: '○',
-      content: 'New step',
+      content: '',
       order: localTasks.length,
       isEditable: true
     }
@@ -250,7 +255,7 @@ export function TaskManagerDropdown({ content, className, isEditable = false, on
                       const newTask: Task = {
                         id: `task-${Date.now()}`,
                         status: '○',
-                        content: 'New step',
+                        content: '',  // Start with empty content
                         order: index + 1,
                         isEditable: true
                       }

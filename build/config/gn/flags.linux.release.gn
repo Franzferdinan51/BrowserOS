@@ -33,8 +33,10 @@ symbol_level = 0
 blink_symbol_level = 0
 exclude_unwind_tables = true
 
-# Disable PGO (Profile-Guided Optimization)
-chrome_pgo_phase = 0
+# Enable PGO (Profile-Guided Optimization)
+chrome_pgo_phase = 2
+dcheck_always_on = false
+enable_swiftshader = false
 
 # API Keys (disable Google services)
 google_api_key = ""

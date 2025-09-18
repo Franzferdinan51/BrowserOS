@@ -31,8 +31,9 @@ def extract_group():
 @click.option('--verbose', '-v', is_flag=True, help='Show detailed output')
 @click.option('--force', '-f', is_flag=True, help='Overwrite existing patches')
 @click.option('--include-binary', is_flag=True, help='Include binary files')
+@click.option('--base', help='Extract full diff from base commit for files in COMMIT')
 @click.pass_context
-def extract_commit(ctx, commit, verbose, force, include_binary):
+def extract_commit(ctx, commit, verbose, force, include_binary, base):
     """Extract patches from a single commit
 
     \b
@@ -40,6 +41,10 @@ def extract_commit(ctx, commit, verbose, force, include_binary):
       dev extract commit HEAD
       dev extract commit abc123
       dev extract commit HEAD~1 --verbose
+      dev extract commit HEAD --base chromium/main
+
+    With --base, extracts files changed in COMMIT but shows
+    the full diff from base..COMMIT for those files.
     """
     # Get chromium source from parent context
     chromium_src = ctx.parent.obj.get('chromium_src')
@@ -56,11 +61,18 @@ def extract_commit(ctx, commit, verbose, force, include_binary):
         log_error(f"Not a git repository: {build_ctx.chromium_src}")
         ctx.exit(1)
 
-    log_info(f"Extracting patches from commit: {commit}")
+    if base:
+        log_info(f"Extracting patches from commit: {commit} (base: {base})")
+        # Validate base commit exists
+        if not validate_commit_exists(base, build_ctx.chromium_src):
+            log_error(f"Base commit not found: {base}")
+            ctx.exit(1)
+    else:
+        log_info(f"Extracting patches from commit: {commit}")
 
     try:
         extracted = extract_single_commit(
-            build_ctx, commit, verbose, force, include_binary
+            build_ctx, commit, verbose, force, include_binary, base
         )
 
         if extracted > 0:
@@ -143,8 +155,17 @@ def extract_range(ctx, base_commit, head_commit, verbose, force, include_binary,
 
 def extract_single_commit(ctx: BuildContext, commit_hash: str,
                          verbose: bool = False, force: bool = False,
-                         include_binary: bool = False) -> int:
+                         include_binary: bool = False,
+                         base: Optional[str] = None) -> int:
     """Extract patches from a single commit
+
+    Args:
+        ctx: Build context
+        commit_hash: Commit to extract
+        verbose: Show detailed output
+        force: Overwrite existing patches
+        include_binary: Include binary files
+        base: If provided, extract full diff from base for files in commit
 
     Returns:
         Number of patches successfully extracted
@@ -159,8 +180,19 @@ def extract_single_commit(ctx: BuildContext, commit_hash: str,
         log_info(f"  Author: {commit_info['author_name']} <{commit_info['author_email']}>")
         log_info(f"  Subject: {commit_info['subject']}")
 
-    # Step 2: Get diff
-    # Use --binary to include binary diffs if requested
+    if base:
+        # With --base: Get files from commit, but diff from base
+        return extract_with_base(ctx, commit_hash, base, verbose, force, include_binary)
+    else:
+        # Normal behavior: diff against parent
+        return extract_normal(ctx, commit_hash, verbose, force, include_binary)
+
+
+def extract_normal(ctx: BuildContext, commit_hash: str,
+                  verbose: bool, force: bool, include_binary: bool) -> int:
+    """Extract patches normally (diff against parent)"""
+
+    # Get diff against parent
     diff_cmd = ['git', 'diff', f'{commit_hash}^..{commit_hash}']
     if include_binary:
         diff_cmd.append('--binary')
@@ -170,34 +202,130 @@ def extract_single_commit(ctx: BuildContext, commit_hash: str,
     if result.returncode != 0:
         raise GitError(f"Failed to get diff for commit {commit_hash}: {result.stderr}")
 
-    # Step 3: Parse diff into file patches
+    # Parse diff into file patches
     file_patches = parse_diff_output(result.stdout)
 
     if not file_patches:
         log_warning("No changes found in commit")
         return 0
 
-    # Step 4: Check for existing patches
-    if not force:
-        existing_patches = []
-        for file_path in file_patches.keys():
-            patch_path = ctx.get_patch_path_for_file(file_path)
-            if patch_path.exists():
-                existing_patches.append(file_path)
+    # Check for existing patches
+    if not force and not check_overwrite(ctx, file_patches, verbose):
+        return 0
 
-        if existing_patches:
-            log_warning(f"Found {len(existing_patches)} existing patches")
-            if verbose:
-                for path in existing_patches[:5]:
-                    log_warning(f"  - {path}")
-                if len(existing_patches) > 5:
-                    log_warning(f"  ... and {len(existing_patches) - 5} more")
+    # Write patches
+    return write_patches(ctx, file_patches, verbose, include_binary)
 
-            if not click.confirm("Overwrite existing patches?", default=False):
-                log_info("Extraction cancelled")
-                return 0
 
-    # Step 5: Write individual patches
+def extract_with_base(ctx: BuildContext, commit_hash: str, base: str,
+                      verbose: bool, force: bool, include_binary: bool) -> int:
+    """Extract patches with custom base (full diff from base for files in commit)"""
+
+    # Step 1: Get list of files changed in the commit
+    changed_files = get_commit_changed_files(commit_hash, ctx.chromium_src)
+
+    if not changed_files:
+        log_warning(f"No files changed in commit {commit_hash}")
+        return 0
+
+    if verbose:
+        log_info(f"Files changed in {commit_hash}: {len(changed_files)}")
+
+    # Step 2: For each file, get diff from base to commit
+    file_patches = {}
+
+    for file_path in changed_files:
+        if verbose:
+            log_info(f"  Getting diff for: {file_path}")
+
+        # Get diff for this specific file from base to commit
+        diff_cmd = ['git', 'diff', f'{base}..{commit_hash}', '--', file_path]
+        if include_binary:
+            diff_cmd.append('--binary')
+
+        result = run_git_command(diff_cmd, cwd=ctx.chromium_src)
+
+        if result.returncode != 0:
+            log_warning(f"Failed to get diff for {file_path}")
+            continue
+
+        if result.stdout.strip():
+            # Parse this single file's diff
+            patches = parse_diff_output(result.stdout)
+            # Should only have one file in the result
+            if patches:
+                file_patches.update(patches)
+        else:
+            # File might have been added/deleted
+            # Check if file exists in base and commit
+            base_exists = run_git_command(
+                ['git', 'cat-file', '-e', f'{base}:{file_path}'],
+                cwd=ctx.chromium_src
+            ).returncode == 0
+
+            commit_exists = run_git_command(
+                ['git', 'cat-file', '-e', f'{commit_hash}:{file_path}'],
+                cwd=ctx.chromium_src
+            ).returncode == 0
+
+            if not base_exists and commit_exists:
+                # File was added - get full content
+                diff_cmd = ['git', 'diff', f'{base}..{commit_hash}', '--', file_path]
+                if include_binary:
+                    diff_cmd.append('--binary')
+                result = run_git_command(diff_cmd, cwd=ctx.chromium_src)
+                if result.stdout.strip():
+                    patches = parse_diff_output(result.stdout)
+                    if patches:
+                        file_patches.update(patches)
+            elif base_exists and not commit_exists:
+                # File was deleted
+                file_patches[file_path] = FilePatch(
+                    file_path=file_path,
+                    operation=FileOperation.DELETE,
+                    patch_content=None,
+                    is_binary=False
+                )
+
+    if not file_patches:
+        log_warning("No patches to extract")
+        return 0
+
+    log_info(f"Extracting {len(file_patches)} patches with base {base}")
+
+    # Check for existing patches
+    if not force and not check_overwrite(ctx, file_patches, verbose):
+        return 0
+
+    # Write patches
+    return write_patches(ctx, file_patches, verbose, include_binary)
+
+
+def check_overwrite(ctx: BuildContext, file_patches: Dict, verbose: bool) -> bool:
+    """Check for existing patches and prompt for overwrite"""
+    existing_patches = []
+    for file_path in file_patches.keys():
+        patch_path = ctx.get_patch_path_for_file(file_path)
+        if patch_path.exists():
+            existing_patches.append(file_path)
+
+    if existing_patches:
+        log_warning(f"Found {len(existing_patches)} existing patches")
+        if verbose:
+            for path in existing_patches[:5]:
+                log_warning(f"  - {path}")
+            if len(existing_patches) > 5:
+                log_warning(f"  ... and {len(existing_patches) - 5} more")
+
+        if not click.confirm("Overwrite existing patches?", default=False):
+            log_info("Extraction cancelled")
+            return False
+    return True
+
+
+def write_patches(ctx: BuildContext, file_patches: Dict[str, FilePatch],
+                 verbose: bool, include_binary: bool) -> int:
+    """Write patches to disk"""
     success_count = 0
     fail_count = 0
     skip_count = 0
@@ -259,7 +387,7 @@ def extract_single_commit(ctx: BuildContext, commit_hash: str,
                 log_warning(f"  No patch content for: {file_path}")
                 skip_count += 1
 
-    # Step 6: Log summary
+    # Log summary
     log_extraction_summary(file_patches)
 
     if fail_count > 0:
@@ -315,18 +443,8 @@ def extract_commit_range(ctx: BuildContext, base_commit: str,
         return 0
 
     # Check for existing patches
-    if not force:
-        existing_patches = []
-        for file_path in file_patches.keys():
-            patch_path = ctx.get_patch_path_for_file(file_path)
-            if patch_path.exists():
-                existing_patches.append(file_path)
-
-        if existing_patches:
-            log_warning(f"Found {len(existing_patches)} existing patches")
-            if not click.confirm("Overwrite existing patches?", default=False):
-                log_info("Extraction cancelled")
-                return 0
+    if not force and not check_overwrite(ctx, file_patches, verbose):
+        return 0
 
     success_count = 0
     fail_count = 0
@@ -340,10 +458,6 @@ def extract_commit_range(ctx: BuildContext, base_commit: str,
         show_percent=True
     ) as patches_bar:
         for file_path, patch in patches_bar:
-            if verbose:
-                # Can't log inside progressbar
-                pass
-
             # Handle different operations
             if patch.operation == FileOperation.DELETE:
                 if create_deletion_marker(ctx, file_path):

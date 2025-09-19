@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/resources/settings/nxtscape_page/nxtscape_page.ts b/chrome/browser/resources/settings/nxtscape_page/nxtscape_page.ts
 new file mode 100644
-index 0000000000000..99c366e7c4e44
+index 0000000000000..ad44c5f741b5c
 --- /dev/null
 +++ b/chrome/browser/resources/settings/nxtscape_page/nxtscape_page.ts
-@@ -0,0 +1,1097 @@
+@@ -0,0 +1,1099 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -413,7 +413,6 @@ index 0000000000000..99c366e7c4e44
 +    // @ts-ignore: setPrefValue exists at runtime from PrefsMixin
 +    this.setPrefValue('browseros.providers', JSON.stringify(data));
 +    console.log('browseros: Saving providers:', data);
-+    this.showStatusMessage_();
 +  }
 +
 +  private generateId_(): string {
@@ -847,6 +846,7 @@ index 0000000000000..99c366e7c4e44
 +    }
 +    
 +    this.saveProviders_();
++    this.showStatusMessage_(this.editingProvider_ ? 'Provider updated' : 'Provider added');
 +    this.closeProviderForm_();
 +  }
 +
@@ -936,7 +936,8 @@ index 0000000000000..99c366e7c4e44
 +    this.defaultProviderId_ = select.value;
 +    this.updateProvidersDefaultStatus_();
 +    this.saveProviders_();
-+    
++    this.showStatusMessage_('Default provider changed');
++
 +    chrome.send('logBrowserOSMetric', ['settings.default_provider.changed', {
 +      old_provider_id: oldProviderId,
 +      new_provider_id: this.defaultProviderId_
@@ -957,7 +958,8 @@ index 0000000000000..99c366e7c4e44
 +    this.defaultProviderId_ = providerId!;
 +    this.updateProvidersDefaultStatus_();
 +    this.saveProviders_();
-+    
++    this.showStatusMessage_('Default provider changed');
++
 +    chrome.send('logBrowserOSMetric', ['settings.default_provider.changed', {
 +      old_provider_id: oldProviderId,
 +      new_provider_id: this.defaultProviderId_

@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.cc b/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.cc
 new file mode 100644
-index 0000000000000..b8555289c07f9
+index 0000000000000..f40a2424641e1
 --- /dev/null
 +++ b/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.cc
-@@ -0,0 +1,1233 @@
+@@ -0,0 +1,1073 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -41,10 +41,6 @@ index 0000000000000..b8555289c07f9
 +
 +namespace extensions {
 +namespace api {
-+
-+// Define PI for cross-platform compatibility
-+// M_PI is not defined on Windows/MSVC by default
-+constexpr float kPi = 3.14159265358979323846f;
 +
 +// Compute CSS->widget scale matching DevTools InputHandler::ScaleFactor.
 +// We intentionally exclude device scale factor (DSF). Widget coordinates
@@ -87,148 +83,6 @@ index 0000000000000..b8555289c07f9
 +}
 +
 +
-+// Helper function to visualize a human-like cursor click.
-+// Shows an orange cursor triangle with ripple effect that moves to the target.
-+// This uses CSS transitions/animations and cleans itself up automatically.
-+void VisualizeInteractionPoint(content::WebContents* web_contents, 
-+                               const gfx::PointF& point,
-+                               int duration_ms,
-+                               float offset_range) {
-+  content::RenderFrameHost* rfh = web_contents->GetPrimaryMainFrame();
-+  if (!rfh)
-+    return;
-+  
-+  // Create visualization with a cursor triangle and ripple.
-+  // Randomize starting position within offset_range for more natural movement.
-+  // Generate random angle and distance for starting position
-+  float angle = (rand() % 360) * kPi / 180.0f;  // Random angle in radians
-+  float distance = offset_range * 0.5f + (rand() % (int)(offset_range * 0.5f)); // 50-100% of offset_range
-+  
-+  const float start_x = point.x() - (cos(angle) * distance);
-+  const float start_y = point.y() - (sin(angle) * distance);
-+  
-+  // Build the JavaScript code using string concatenation to avoid format string issues
-+  std::string js_code = base::StringPrintf(
-+      R"(
-+      (function() {
-+        var COLOR = '#FC661A';
-+        var LIGHT_COLOR = '#FFA366';  // Lighter shade for ripple
-+        var TARGET_X = %f, TARGET_Y = %f;
-+        var START_X = %f, START_Y = %f;
-+        var DURATION = %d;
-+
-+        // Remove previous indicators
-+        document.querySelectorAll('.browseros-indicator').forEach(e => e.remove());
-+
-+        // Styles (insert once)
-+        if (!document.querySelector('#browseros-indicator-styles')) {
-+          var style = document.createElement('style');
-+          style.id = 'browseros-indicator-styles';
-+          style.textContent = `
-+            @keyframes browseros-ripple { 
-+              0%% { 
-+                transform: translate(-50%%, -50%%) scale(0.3); 
-+                opacity: 0.6; 
-+              } 
-+              100%% { 
-+                transform: translate(-50%%, -50%%) scale(2.5); 
-+                opacity: 0; 
-+              } 
-+            }
-+          `;
-+          document.head.appendChild(style);
-+        }
-+
-+        // Container positioned via transform for smooth movement
-+        var container = document.createElement('div');
-+        container.className = 'browseros-indicator';
-+        container.style.position = 'fixed';
-+        container.style.left = '0';
-+        container.style.top = '0';
-+        container.style.transform = 'translate(' + START_X + 'px, ' + START_Y + 'px)';
-+        container.style.transition = 'transform 220ms cubic-bezier(.2,.7,.2,1)';
-+        container.style.zIndex = '999999';
-+        container.style.pointerEvents = 'none';
-+
-+        // Regular triangle cursor
-+        var cursor = document.createElement('div');
-+        cursor.style.width = '0';
-+        cursor.style.height = '0';
-+        cursor.style.borderStyle = 'solid';
-+        cursor.style.borderWidth = '0 8px 14px 8px';  // Regular triangle proportions
-+        cursor.style.borderColor = 'transparent transparent ' + COLOR + ' transparent';
-+        cursor.style.filter = 'drop-shadow(0 1px 2px rgba(0,0,0,.4)) drop-shadow(0 0 3px rgba(252,102,26,.3))';
-+        cursor.style.transform = 'rotate(-45deg)';
-+        cursor.style.position = 'absolute';
-+        cursor.style.left = '-8px';  // Offset so tip is at 0,0
-+        cursor.style.top = '-10px';   // Offset so tip is at 0,0
-+        container.appendChild(cursor);
-+
-+        // Ripple container positioned exactly at cursor tip (0,0 of container)
-+        var rippleContainer = document.createElement('div');
-+        rippleContainer.style.position = 'absolute';
-+        rippleContainer.style.left = '0';  // Tip is at origin
-+        rippleContainer.style.top = '0';
-+        rippleContainer.style.width = '0';
-+        rippleContainer.style.height = '0';
-+
-+        // Ripple ring 1 (inner ripple) - centered on cursor tip
-+        var ring1 = document.createElement('div');
-+        ring1.style.position = 'absolute';
-+        ring1.style.left = '50%%';
-+        ring1.style.top = '50%%';
-+        ring1.style.width = '16px';
-+        ring1.style.height = '16px';
-+        ring1.style.borderRadius = '50%%';
-+        ring1.style.border = '2px solid ' + LIGHT_COLOR;
-+        ring1.style.animation = 'browseros-ripple 600ms ease-out forwards';
-+        rippleContainer.appendChild(ring1);
-+
-+        // Ripple ring 2 (outer ripple with slight delay) - centered on cursor tip
-+        var ring2 = document.createElement('div');
-+        ring2.style.position = 'absolute';
-+        ring2.style.left = '50%%';
-+        ring2.style.top = '50%%';
-+        ring2.style.width = '16px';
-+        ring2.style.height = '16px';
-+        ring2.style.borderRadius = '50%%';
-+        ring2.style.border = '1.5px solid ' + COLOR;
-+        ring2.style.animation = 'browseros-ripple 800ms ease-out forwards';
-+        ring2.style.animationDelay = '150ms';
-+        rippleContainer.appendChild(ring2);
-+
-+        container.appendChild(rippleContainer);
-+        document.body.appendChild(container);
-+
-+        // Kick off movement next frame
-+        requestAnimationFrame(() => {
-+          container.style.transform = 'translate(' + TARGET_X + 'px, ' + TARGET_Y + 'px)';
-+        });
-+
-+        // Fade and remove after duration
-+        setTimeout(() => {
-+          container.style.transition = 'opacity 320ms ease, transform 200ms ease-out';
-+          container.style.opacity = '0';
-+          setTimeout(() => container.remove(), 360);
-+        }, Math.max(300, DURATION));
-+      })();
-+      )",
-+      point.x(), point.y(),
-+      start_x, start_y,
-+      duration_ms);
-+  
-+  std::u16string js_visualizer = base::UTF8ToUTF16(js_code);
-+  
-+  rfh->ExecuteJavaScriptForTests(
-+      js_visualizer,
-+      base::NullCallback(),
-+      /*honor_js_content_settings=*/false);
-+  
-+  // Small delay to ensure the indicator is visible
-+  base::PlatformThread::Sleep(base::Milliseconds(30));
-+}
-+
-+
 +// Helper to create and dispatch mouse events for clicking
 +void PointClick(content::WebContents* web_contents, 
 +                  const gfx::PointF& point) {
@@ -249,9 +103,6 @@ index 0000000000000..b8555289c07f9
 +  gfx::PointF css_point = point;
 +  const float scale = CssToWidgetScale(web_contents, rwh);
 +  gfx::PointF widget_point(css_point.x() * scale, css_point.y() * scale);
-+
-+  // Visualize the actual target location on the page (CSS pixel coords).
-+  // VisualizeInteractionPoint(web_contents, css_point, 2000, 50.0f);
 +
 +  // Create mouse down event
 +  blink::WebMouseEvent mouse_down;
@@ -913,12 +764,6 @@ index 0000000000000..b8555289c07f9
 +// Helper to clear an input field with change detection
 +bool ClearWithDetection(content::WebContents* web_contents,
 +                       const NodeInfo& node_info) {
-+  // Get center point for visualization
-+  // gfx::PointF clear_point = GetNodeCenterPoint(web_contents, node_info);
-+  
-+  // Visualize where we're about to clear (orange for clear)
-+  // VisualizeInteractionPoint(web_contents, clear_point, 2000, 50.0f);
-+  
 +  // Use change detection with JavaScript clear
 +  bool changed = BrowserOSChangeDetector::ExecuteWithDetection(
 +      web_contents,
@@ -1158,8 +1003,6 @@ index 0000000000000..b8555289c07f9
 +      web_contents,
 +      [&]() { 
 +        PointClick(web_contents, point);
-+        // Optionally visualize the click point
-+        // VisualizeInteractionPoint(web_contents, point, 1500);
 +      },
 +      base::Milliseconds(300));
 +  
@@ -1177,9 +1020,6 @@ index 0000000000000..b8555289c07f9
 +  
 +  // First click at the coordinates to focus the element
 +  PointClick(web_contents, point);
-+  
-+  // Visualize the click point briefly
-+  // VisualizeInteractionPoint(web_contents, point, 1000);
 +  
 +  // Wait a moment for focus to be established
 +  base::PlatformThread::Sleep(base::Milliseconds(100));

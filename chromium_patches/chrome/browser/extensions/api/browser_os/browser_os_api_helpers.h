@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.h b/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.h
 new file mode 100644
-index 0000000000000..434ddabfec46b
+index 0000000000000..1b12c66835998
 --- /dev/null
 +++ b/chrome/browser/extensions/api/browser_os/browser_os_api_helpers.h
-@@ -0,0 +1,145 @@
+@@ -0,0 +1,136 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -114,15 +114,6 @@ index 0000000000000..434ddabfec46b
 +// Returns true if the key press caused a change in the page
 +bool KeyPressWithDetection(content::WebContents* web_contents,
 +                          const std::string& key);
-+
-+// Visualizes a human-like cursor click at a CSS point with orange color,
-+// ripple effect and randomized movement-in animation.
-+// duration_ms: How long before auto fade-out and removal.
-+// offset_range: Max distance for randomized starting position (default 50px).
-+void VisualizeInteractionPoint(content::WebContents* web_contents,
-+                               const gfx::PointF& point,
-+                               int duration_ms = 3000,
-+                               float offset_range = 50.0f);
 +
 +// Helper to show highlights for clickable, typeable, and selectable elements that are in viewport
 +// Only highlights elements that are actually visible and interactable

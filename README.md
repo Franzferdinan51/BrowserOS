@@ -30,8 +30,11 @@
    - [macOS](https://files.browseros.com/download/BrowserOS.dmg)
    - [Windows](https://files.browseros.com/download/BrowserOS_installer.exe)
    - [Linux](https://files.browseros.com/download/BrowserOS.AppImage)
+
 2. Import your Chrome data (optional)
+
 3. Connect your AI provider (OpenAI, Anthropic, or local Ollama)
+
 4. Start automating!
 
 ## What makes BrowserOS special

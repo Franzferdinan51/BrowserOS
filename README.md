@@ -66,7 +66,7 @@
 
 
 
-### ⚡ Use BrowserOS to scrape/extract
+### ⚡ Use BrowserOS to scrap data
 <div align="center">
 <img src="docs/videos/nxtscape-productivity.gif" alt="Productivity" width="80%">
 </div>

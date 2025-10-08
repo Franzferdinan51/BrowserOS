@@ -6,10 +6,6 @@ labels: enhancement
 assignees: ''
 ---
 
-Thanks for sharing your idea! We love hearing how we can make BrowserOS better. ✨
-
----
-
 What problem does this solve? (describe the problem you're experiencing)
 * 
 
@@ -21,3 +17,6 @@ What's your proposed solution? (how should BrowserOS address this?)
 
 Additional context (optional - add screenshots, examples, or other helpful details)
 * 
+
+---
+Thanks for sharing your idea! We love hearing how we can make BrowserOS better. ✨

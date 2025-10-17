@@ -8,49 +8,19 @@ BrowserOS runs as an MCP server, letting Claude control your browser directly—
 ## How to use on Claude Code
 
 1. [Download BrowserOS from the website](https://files.browseros.com/download)
-
 2. Open BrowserOS and open a new tab. Click the settings icon in the top right corner (see screenshot below)
-
 3. From the settings page, navigate to **MCP** in the sidebar and copy the MCP URL
-
-4. In your terminal, type:
-```bash
-claude mcp add --transport http browseros http://127.0.0.1:<port>/mcp
-```
-Replace `<port>` with your port number from the MCP URL (usually `9225`)
-
-5. Now start Claude Code:
-```bash
-claude --dangerously-skip-permissions
-```
-This way Claude doesn't ask for confirmation each time
-
-6. You can now type:
-```
-Open amazon.com on browseros
-```
-
-**Screenshot: Settings icon location**
-
-<div style={{width: '50%'}}>
-
-![Click settings icon](/docs/images/mcp-click-on-settings-icon.png)
-
-</div>
+4. In your terminal, type: `claude mcp add --transport http browseros http://127.0.0.1:<port>/mcp` (Replace `<port>` with your port number, usually `9225`)
+5. Now start Claude Code: `claude --dangerously-skip-permissions` (so Claude doesn't ask for confirmation each time)
+6. You can now type: `Open amazon.com on browseros`
 
 ---
 
 ## How to add on Claude Desktop
 
 1. [Download BrowserOS from the website](https://files.browseros.com/download)
-
 2. Open BrowserOS and click the settings icon. Navigate to **MCP** in the sidebar and note the port number (usually `9225`)
-
-3. Open your Claude Desktop config file:
-```
-/Users/<username>/Library/Application Support/Claude/claude_desktop_config.json
-```
-
+3. Open your Claude Desktop config file: `/Users/<username>/Library/Application Support/Claude/claude_desktop_config.json`
 4. Add BrowserOS to your config:
 ```json
 {
@@ -63,10 +33,13 @@ Open amazon.com on browseros
 }
 ```
 Replace `9225` with your port number if different
-
 5. Restart Claude Desktop. You should see the MCP connection indicator showing BrowserOS is connected
 
-**Screenshot: Settings icon location**
+---
+
+## Screenshots
+
+**Settings icon location:**
 
 <div style={{width: '50%'}}>
 

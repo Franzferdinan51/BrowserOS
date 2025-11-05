@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/browseros_server/browseros_server_prefs.cc b/chrome/browser/browseros_server/browseros_server_prefs.cc
 new file mode 100644
-index 0000000000000..fdd265d2f134c
+index 0000000000000..f9c7a9990cb01
 --- /dev/null
 +++ b/chrome/browser/browseros_server/browseros_server_prefs.cc
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,49 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -29,6 +29,9 @@ index 0000000000000..fdd265d2f134c
 +// Whether MCP server is enabled
 +const char kMCPServerEnabled[] = "browseros.server.mcp_enabled";
 +
++// Whether server restart has been requested (auto-reset after restart)
++const char kRestartServerRequested[] = "browseros.server.restart_requested";
++
 +void RegisterLocalStatePrefs(PrefRegistrySimple* registry) {
 +  // CDP port
 +  registry->RegisterIntegerPref(kCDPServerPort, kDefaultCDPPort);
@@ -44,6 +47,9 @@ index 0000000000000..fdd265d2f134c
 +
 +  // MCP enabled
 +  registry->RegisterBooleanPref(kMCPServerEnabled, true);
++
++  // Restart requested (default false, auto-reset after restart)
++  registry->RegisterBooleanPref(kRestartServerRequested, false);
 +}
 +
 +}  // namespace browseros_server

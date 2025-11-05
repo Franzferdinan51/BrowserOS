@@ -307,12 +307,16 @@ def build_main(
                     ctx, interactive=patch_interactive, commit_each=patch_commit
                 )
 
-                # Copy resources
+                if slack_notifications:
+                    notify_build_step("Completed applying patches")
+
+            # Copy resources for each architecture (YAML filters by arch)
+            if apply_patches_flag:
                 copy_resources(ctx, commit_each=patch_commit)
 
                 if slack_notifications:
                     notify_build_step(
-                        "Completed applying patches and copying resources"
+                        f"Completed copying resources for {arch_name}"
                     )
 
             # Build for this architecture

@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/browseros_server/browseros_server_prefs.h b/chrome/browser/browseros_server/browseros_server_prefs.h
 new file mode 100644
-index 0000000000000..e86296bdc15c7
+index 0000000000000..03719e252a15a
 --- /dev/null
 +++ b/chrome/browser/browseros_server/browseros_server_prefs.h
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,31 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -27,6 +27,7 @@ index 0000000000000..e86296bdc15c7
 +extern const char kAgentServerPort[];
 +extern const char kExtensionServerPort[];
 +extern const char kMCPServerEnabled[];
++extern const char kRestartServerRequested[];
 +
 +// Registers BrowserOS server preferences in Local State (browser-wide prefs)
 +void RegisterLocalStatePrefs(PrefRegistrySimple* registry);

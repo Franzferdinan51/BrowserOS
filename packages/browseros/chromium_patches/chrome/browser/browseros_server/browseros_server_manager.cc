@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/browseros_server/browseros_server_manager.cc b/chrome/browser/browseros_server/browseros_server_manager.cc
 new file mode 100644
-index 0000000000000..e6bd851f42bfa
+index 0000000000000..4d34f3efb2645
 --- /dev/null
 +++ b/chrome/browser/browseros_server/browseros_server_manager.cc
-@@ -0,0 +1,863 @@
+@@ -0,0 +1,1070 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -25,6 +25,11 @@ index 0000000000000..e6bd851f42bfa
 +#include "base/threading/thread_restrictions.h"
 +#include "build/build_config.h"
 +#include "chrome/browser/browser_process.h"
++
++#if BUILDFLAG(IS_POSIX)
++#include <signal.h>
++#endif
++
 +#include "chrome/browser/browseros_server/browseros_server_prefs.h"
 +#include "chrome/browser/net/system_network_context_manager.h"
 +#include "chrome/browser/profiles/profile.h"
@@ -93,6 +98,8 @@ index 0000000000000..e6bd851f42bfa
 +// This function performs blocking I/O operations (PathExists, LaunchProcess).
 +base::Process LaunchProcessOnBackgroundThread(
 +    const base::FilePath& exe_path,
++    const base::FilePath& resources_dir,
++    const base::FilePath& execution_dir,
 +    uint16_t cdp_port,
 +    uint16_t mcp_port,
 +    uint16_t agent_port,
@@ -104,12 +111,26 @@ index 0000000000000..e6bd851f42bfa
 +    return base::Process();
 +  }
 +
++  if (execution_dir.empty()) {
++    LOG(ERROR) << "browseros: Execution directory path is empty";
++    return base::Process();
++  }
++
++  // Ensure execution directory exists (blocking I/O)
++  if (!base::CreateDirectory(execution_dir)) {
++    LOG(ERROR) << "browseros: Failed to create execution directory at: "
++               << execution_dir;
++    return base::Process();
++  }
++
 +  // Build command line
 +  base::CommandLine cmd(exe_path);
 +  cmd.AppendSwitchASCII("cdp-port", base::NumberToString(cdp_port));
 +  cmd.AppendSwitchASCII("http-mcp-port", base::NumberToString(mcp_port));
 +  cmd.AppendSwitchASCII("agent-port", base::NumberToString(agent_port));
 +  cmd.AppendSwitchASCII("extension-port", base::NumberToString(extension_port));
++  cmd.AppendSwitchPath("resources-dir", resources_dir);
++  cmd.AppendSwitchPath("execution-dir", execution_dir);
 +
 +  // Set up launch options
 +  base::LaunchOptions options;
@@ -158,6 +179,8 @@ index 0000000000000..e6bd851f42bfa
 +
 +}  // namespace
 +
++namespace browseros {
++
 +// static
 +BrowserOSServerManager* BrowserOSServerManager::GetInstance() {
 +  static base::NoDestructor<BrowserOSServerManager> instance;
@@ -170,28 +193,167 @@ index 0000000000000..e6bd851f42bfa
 +  Shutdown();
 +}
 +
++bool BrowserOSServerManager::AcquireLock() {
++  // Allow blocking for lock file operations (short-duration I/O)
++  base::ScopedAllowBlocking allow_blocking;
++
++  base::FilePath exec_dir = GetBrowserOSExecutionDir();
++  if (exec_dir.empty()) {
++    LOG(ERROR) << "browseros: Failed to resolve execution directory for lock";
++    return false;
++  }
++
++  base::FilePath lock_path = exec_dir.Append(FILE_PATH_LITERAL("server.lock"));
++
++  lock_file_ = base::File(lock_path,
++                          base::File::FLAG_OPEN_ALWAYS |
++                          base::File::FLAG_READ |
++                          base::File::FLAG_WRITE);
++
++  if (!lock_file_.IsValid()) {
++    LOG(ERROR) << "browseros: Failed to open lock file: " << lock_path;
++    return false;
++  }
++
++  base::File::Error lock_error =
++      lock_file_.Lock(base::File::LockMode::kExclusive);
++  if (lock_error != base::File::FILE_OK) {
++    LOG(INFO) << "browseros: Server already running in another Chrome process "
++              << "(lock file: " << lock_path << ")";
++    lock_file_.Close();
++    return false;
++  }
++
++  LOG(INFO) << "browseros: Acquired exclusive lock on " << lock_path;
++  return true;
++}
++
++void BrowserOSServerManager::InitializePortsAndPrefs() {
++  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
++  PrefService* prefs = g_browser_process->local_state();
++
++  // STEP 1: Read from prefs or use defaults
++  if (!prefs) {
++    cdp_port_ = browseros_server::kDefaultCDPPort;
++    mcp_port_ = browseros_server::kDefaultMCPPort;
++    agent_port_ = browseros_server::kDefaultAgentPort;
++    extension_port_ = browseros_server::kDefaultExtensionPort;
++    mcp_enabled_ = true;
++  } else {
++    cdp_port_ = prefs->GetInteger(browseros_server::kCDPServerPort);
++    if (cdp_port_ <= 0) {
++      cdp_port_ = browseros_server::kDefaultCDPPort;
++    }
++
++    mcp_port_ = prefs->GetInteger(browseros_server::kMCPServerPort);
++    if (mcp_port_ <= 0) {
++      mcp_port_ = browseros_server::kDefaultMCPPort;
++    }
++
++    agent_port_ = prefs->GetInteger(browseros_server::kAgentServerPort);
++    if (agent_port_ <= 0) {
++      agent_port_ = browseros_server::kDefaultAgentPort;
++    }
++
++    extension_port_ = prefs->GetInteger(browseros_server::kExtensionServerPort);
++    if (extension_port_ <= 0) {
++      extension_port_ = browseros_server::kDefaultExtensionPort;
++    }
++
++    mcp_enabled_ = prefs->GetBoolean(browseros_server::kMCPServerEnabled);
++
++    // Set up pref change observers
++    if (!pref_change_registrar_) {
++      pref_change_registrar_ = std::make_unique<PrefChangeRegistrar>();
++      pref_change_registrar_->Init(prefs);
++      pref_change_registrar_->Add(
++          browseros_server::kMCPServerEnabled,
++          base::BindRepeating(&BrowserOSServerManager::OnMCPEnabledChanged,
++                              base::Unretained(this)));
++      pref_change_registrar_->Add(
++          browseros_server::kRestartServerRequested,
++          base::BindRepeating(&BrowserOSServerManager::OnRestartServerRequestedChanged,
++                              base::Unretained(this)));
++    }
++  }
++  cdp_port_ = FindAvailablePort(cdp_port_);
++  mcp_port_ = FindAvailablePort(mcp_port_);
++  agent_port_ = FindAvailablePort(agent_port_);
++  extension_port_ = FindAvailablePort(extension_port_);
++
++  // STEP 3: Apply command-line overrides (these take highest priority)
++  int cdp_override = GetPortOverrideFromCommandLine(
++      command_line, "browseros-cdp-port", "CDP port");
++  if (cdp_override > 0) {
++    cdp_port_ = cdp_override;
++  }
++
++  int mcp_override = GetPortOverrideFromCommandLine(
++      command_line, "browseros-mcp-port", "MCP port");
++  if (mcp_override > 0) {
++    mcp_port_ = mcp_override;
++    mcp_enabled_ = true;  // Implicit enable when port specified
++  }
++
++  int agent_override = GetPortOverrideFromCommandLine(
++      command_line, "browseros-agent-port", "Agent port");
++  if (agent_override > 0) {
++    agent_port_ = agent_override;
++  }
++
++  int extension_override = GetPortOverrideFromCommandLine(
++      command_line, "browseros-extension-port", "Extension port");
++  if (extension_override > 0) {
++    extension_port_ = extension_override;
++  }
++
++  LOG(INFO) << "browseros: Final ports - CDP: " << cdp_port_
++            << ", MCP: " << mcp_port_ << ", Agent: " << agent_port_
++            << ", Extension: " << extension_port_;
++}
++
++void BrowserOSServerManager::SavePortsToPrefs() {
++  PrefService* prefs = g_browser_process->local_state();
++  if (!prefs) {
++    return;
++  }
++
++  prefs->SetInteger(browseros_server::kCDPServerPort, cdp_port_);
++  prefs->SetInteger(browseros_server::kMCPServerPort, mcp_port_);
++  prefs->SetInteger(browseros_server::kAgentServerPort, agent_port_);
++  prefs->SetInteger(browseros_server::kExtensionServerPort, extension_port_);
++  prefs->SetBoolean(browseros_server::kMCPServerEnabled, mcp_enabled_);
++
++  LOG(INFO) << "browseros: Saved finalized ports to prefs";
++}
++
 +void BrowserOSServerManager::Start() {
 +  if (is_running_) {
 +    LOG(INFO) << "browseros: BrowserOS server already running";
 +    return;
 +  }
 +
-+  // Check if server is disabled via command line
 +  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
 +  if (command_line->HasSwitch("disable-browseros-server")) {
 +    LOG(INFO) << "browseros: BrowserOS server disabled via command line";
 +    return;
 +  }
 +
++  // Try to acquire system-wide lock
++  if (!AcquireLock()) {
++    return;  // Another Chrome process already owns the server
++  }
++
 +  LOG(INFO) << "browseros: Starting BrowserOS server";
 +
-+  // Step 1: Start CDP server
-+  StartCDPServer();
++  // Initialize and finalize ports
++  InitializePortsAndPrefs();
++  SavePortsToPrefs();
 +
-+  // Step 2: Launch BrowserOS process
++  // Start servers and process
++  StartCDPServer();
 +  LaunchBrowserOSProcess();
 +
-+  // Step 3: Start health checking every 60 seconds
 +  health_check_timer_.Start(FROM_HERE, base::Seconds(60), this,
 +                            &BrowserOSServerManager::CheckServerHealth);
 +}
@@ -207,6 +369,13 @@ index 0000000000000..e6bd851f42bfa
 +
 +  TerminateBrowserOSProcess();
 +  StopCDPServer();
++
++  // Release lock
++  if (lock_file_.IsValid()) {
++    lock_file_.Unlock();
++    lock_file_.Close();
++    LOG(INFO) << "browseros: Released lock file";
++  }
 +}
 +
 +bool BrowserOSServerManager::IsRunning() const {
@@ -218,88 +387,19 @@ index 0000000000000..e6bd851f42bfa
 +}
 +
 +void BrowserOSServerManager::StartCDPServer() {
-+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-+
-+  PrefService* prefs = g_browser_process->local_state();
-+  if (!prefs) {
-+    LOG(ERROR) << "browseros: Failed to get local state prefs";
-+    // Find available ports from standard defaults
-+    cdp_port_ = FindAvailablePort(browseros_server::kDefaultCDPPort);
-+    mcp_port_ = FindAvailablePort(browseros_server::kDefaultMCPPort);
-+    agent_port_ = FindAvailablePort(browseros_server::kDefaultAgentPort);
-+    extension_port_ = FindAvailablePort(browseros_server::kDefaultExtensionPort);
-+  } else {
-+    // Read CDP port from prefs and find available port
-+    int saved_cdp_port = prefs->GetInteger(browseros_server::kCDPServerPort);
-+    int cdp_starting_port = (saved_cdp_port > 0) ? saved_cdp_port : browseros_server::kDefaultCDPPort;
-+    cdp_port_ = FindAvailablePort(cdp_starting_port);
-+
-+    // Read MCP settings
-+    int saved_mcp_port = prefs->GetInteger(browseros_server::kMCPServerPort);
-+    int mcp_starting_port = (saved_mcp_port > 0) ? saved_mcp_port : browseros_server::kDefaultMCPPort;
-+    mcp_port_ = FindAvailablePort(mcp_starting_port);
-+
-+    // Read Agent port from prefs and find available port
-+    int saved_agent_port = prefs->GetInteger(browseros_server::kAgentServerPort);
-+    int agent_starting_port = (saved_agent_port > 0) ? saved_agent_port : browseros_server::kDefaultAgentPort;
-+    agent_port_ = FindAvailablePort(agent_starting_port);
-+
-+    // Read Extension port from prefs and find available port
-+    int saved_extension_port = prefs->GetInteger(browseros_server::kExtensionServerPort);
-+    int extension_starting_port = (saved_extension_port > 0) ? saved_extension_port : browseros_server::kDefaultExtensionPort;
-+    extension_port_ = FindAvailablePort(extension_starting_port);
-+
-+    mcp_enabled_ = prefs->GetBoolean(browseros_server::kMCPServerEnabled);
-+
-+    // Set up preference change observer for MCP enabled flag
-+    if (!pref_change_registrar_) {
-+      pref_change_registrar_ = std::make_unique<PrefChangeRegistrar>();
-+      pref_change_registrar_->Init(prefs);
-+      pref_change_registrar_->Add(
-+          browseros_server::kMCPServerEnabled,
-+          base::BindRepeating(&BrowserOSServerManager::OnMCPEnabledChanged,
-+                              base::Unretained(this)));
-+    }
-+  }
-+
-+  LOG(INFO) << "browseros: Ports allocated - CDP: " << cdp_port_
-+            << ", MCP: " << mcp_port_ << ", Agent: " << agent_port_
-+            << ", Extension: " << extension_port_;
-+
-+  // Check for command-line port overrides
-+  int mcp_override = GetPortOverrideFromCommandLine(
-+      command_line, "browseros-mcp-port", "MCP port");
-+  if (mcp_override > 0) {
-+    mcp_port_ = mcp_override;
-+    // Implicitly enable MCP when port is specified
-+    mcp_enabled_ = true;
-+    LOG(INFO) << "browseros: MCP server implicitly enabled via command line";
-+  }
-+
-+  int agent_override = GetPortOverrideFromCommandLine(
-+      command_line, "browseros-agent-port", "Agent port");
-+  if (agent_override > 0) {
-+    agent_port_ = agent_override;
-+  }
-+
-+  int extension_override = GetPortOverrideFromCommandLine(
-+      command_line, "browseros-extension-port", "Extension port");
-+  if (extension_override > 0) {
-+    extension_port_ = extension_override;
-+  }
-+
 +  LOG(INFO) << "browseros: Starting CDP server on port " << cdp_port_;
 +
-+  // Start Chromium's built-in DevTools remote debugging server
 +  content::DevToolsAgentHost::StartRemoteDebuggingServer(
 +      std::make_unique<CDPServerSocketFactory>(cdp_port_),
-+      base::FilePath(),  // No output dir needed
-+      base::FilePath()); // No debug frontend dir
++      base::FilePath(),
++      base::FilePath());
 +
 +  LOG(INFO) << "browseros: CDP WebSocket server started at ws://127.0.0.1:"
 +            << cdp_port_;
 +  LOG(INFO) << "browseros: MCP server port: " << mcp_port_
 +            << " (enabled: " << (mcp_enabled_ ? "true" : "false") << ")";
++  LOG(INFO) << "browseros: Agent server port: " << agent_port_;
++  LOG(INFO) << "browseros: Extension server port: " << extension_port_;
 +}
 +
 +void BrowserOSServerManager::StopCDPServer() {
@@ -313,8 +413,18 @@ index 0000000000000..e6bd851f42bfa
 +}
 +
 +void BrowserOSServerManager::LaunchBrowserOSProcess() {
-+  // Get executable path on UI thread (PathService::Get is thread-safe)
 +  base::FilePath exe_path = GetBrowserOSServerExecutablePath();
++  base::FilePath resources_dir = GetBrowserOSServerResourcesPath();
++  base::FilePath execution_dir = GetBrowserOSExecutionDir();
++  if (execution_dir.empty()) {
++    LOG(ERROR) << "browseros: Failed to resolve execution directory";
++    StopCDPServer();
++    return;
++  }
++
++  LOG(INFO) << "browseros: Launching server - binary: " << exe_path;
++  LOG(INFO) << "browseros: Launching server - resources: " << resources_dir;
++  LOG(INFO) << "browseros: Launching server - execution dir: " << execution_dir;
 +
 +  // Capture values to pass to background thread
 +  uint16_t cdp_port = cdp_port_;
@@ -325,8 +435,9 @@ index 0000000000000..e6bd851f42bfa
 +  // Post blocking work to background thread, get result back on UI thread
 +  base::ThreadPool::PostTaskAndReplyWithResult(
 +      FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_BLOCKING},
-+      base::BindOnce(&LaunchProcessOnBackgroundThread, exe_path, cdp_port,
-+                     mcp_port, agent_port, extension_port),
++      base::BindOnce(&LaunchProcessOnBackgroundThread, exe_path, resources_dir,
++                     execution_dir, cdp_port, mcp_port, agent_port,
++                     extension_port),
 +      base::BindOnce(&BrowserOSServerManager::OnProcessLaunched,
 +                     weak_factory_.GetWeakPtr()));
 +}
@@ -335,6 +446,7 @@ index 0000000000000..e6bd851f42bfa
 +  if (!process.IsValid()) {
 +    LOG(ERROR) << "browseros: Failed to launch BrowserOS server";
 +    StopCDPServer();
++    is_restarting_ = false;
 +    return;
 +  }
 +
@@ -347,20 +459,18 @@ index 0000000000000..e6bd851f42bfa
 +  LOG(INFO) << "browseros: Agent port: " << agent_port_;
 +  LOG(INFO) << "browseros: Extension port: " << extension_port_;
 +
-+  // Save prefs to Local State now that we know the server launched
-+  PrefService* prefs = g_browser_process->local_state();
-+  if (prefs) {
-+    prefs->SetInteger(browseros_server::kCDPServerPort, cdp_port_);
-+    prefs->SetInteger(browseros_server::kMCPServerPort, mcp_port_);
-+    prefs->SetInteger(browseros_server::kAgentServerPort, agent_port_);
-+    prefs->SetInteger(browseros_server::kExtensionServerPort, extension_port_);
-+    prefs->SetBoolean(browseros_server::kMCPServerEnabled, mcp_enabled_);
-+    LOG(INFO) << "browseros: Saved prefs to Local State";
-+  }
-+
-+  // Start monitoring the process
 +  process_check_timer_.Start(FROM_HERE, base::Seconds(5), this,
 +                             &BrowserOSServerManager::CheckProcessStatus);
++
++  // Reset restart flag and pref after successful launch
++  if (is_restarting_) {
++    is_restarting_ = false;
++    PrefService* prefs = g_browser_process->local_state();
++    if (prefs && prefs->GetBoolean(browseros_server::kRestartServerRequested)) {
++      prefs->SetBoolean(browseros_server::kRestartServerRequested, false);
++      LOG(INFO) << "browseros: Restart completed, reset restart_requested pref";
++    }
++  }
 +
 +  // /init will be sent after first successful periodic health check
 +
@@ -375,26 +485,40 @@ index 0000000000000..e6bd851f42bfa
 +    return;
 +  }
 +
-+  LOG(INFO) << "browseros: Terminating BrowserOS server process";
++  LOG(INFO) << "browseros: Force killing BrowserOS server process (PID: "
++            << process_.Pid() << ")";
 +
 +  // Reset init flag so it gets sent again after restart
 +  init_request_sent_ = false;
 +
-+  // Try graceful shutdown first
-+  process_.Terminate(0, false);
++  // sync primitives is needed for process termination. 
++  // NOTE: only run on background threads
++  base::ScopedAllowBaseSyncPrimitives allow_sync;
++  base::ScopedAllowBlocking allow_blocking;
 +
-+  // Give it some time to shut down, then force kill if still running
-+  base::ThreadPool::PostDelayedTask(
-+      FROM_HERE, {base::MayBlock()},
-+      base::BindOnce(
-+          [](base::Process process) {
-+            if (process.IsValid()) {
-+              // Force kill if still running
-+              process.Terminate(0, false);
-+            }
-+          },
-+          process_.Duplicate()),
-+      base::Seconds(2));
++#if BUILDFLAG(IS_POSIX)
++  // POSIX: Send SIGKILL for immediate termination (no graceful shutdown)
++  // This matches Windows TerminateProcess behavior
++  base::ProcessId pid = process_.Pid();
++  if (kill(pid, SIGKILL) == 0) {
++    int exit_code = 0;
++    if (process_.WaitForExit(&exit_code)) {
++      LOG(INFO) << "browseros: Process killed successfully with SIGKILL";
++    } else {
++      LOG(WARNING) << "browseros: SIGKILL sent but WaitForExit failed";
++    }
++  } else {
++    PLOG(ERROR) << "browseros: Failed to send SIGKILL to PID " << pid;
++  }
++#else
++  // Windows: TerminateProcess is already immediate force kill
++  bool terminated = process_.Terminate(0, true);
++  if (terminated) {
++    LOG(INFO) << "browseros: Process terminated successfully";
++  } else {
++    LOG(ERROR) << "browseros: Failed to terminate process";
++  }
++#endif
 +
 +  is_running_ = false;
 +}
@@ -551,6 +675,60 @@ index 0000000000000..e6bd851f42bfa
 +    mcp_enabled_ = new_value;
 +    SendMCPControlRequest(new_value);
 +  }
++}
++
++void BrowserOSServerManager::OnRestartServerRequestedChanged() {
++  PrefService* prefs = g_browser_process->local_state();
++  if (!prefs) {
++    return;
++  }
++
++  bool restart_requested = prefs->GetBoolean(browseros_server::kRestartServerRequested);
++
++  // Only process if pref is set to true
++  if (!restart_requested) {
++    return;
++  }
++
++  // Ignore if already restarting (prevents thrashing from UI spam)
++  if (is_restarting_) {
++    LOG(INFO) << "browseros: Restart already in progress, ignoring duplicate request";
++    return;
++  }
++
++  // Ignore if not running
++  if (!is_running_) {
++    LOG(WARNING) << "browseros: Cannot restart - server is not running";
++    // Reset pref anyway
++    prefs->SetBoolean(browseros_server::kRestartServerRequested, false);
++    return;
++  }
++
++  LOG(INFO) << "browseros: Server restart requested via preference";
++  is_restarting_ = true;
++
++  // Stop timer now (must be on UI thread)
++  process_check_timer_.Stop();
++
++  // Capture UI task runner to post back after background work
++  auto ui_task_runner = base::SequencedTaskRunner::GetCurrentDefault();
++
++  // Kill process on background thread, then relaunch on UI thread
++  base::ThreadPool::PostTask(
++      FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_BLOCKING},
++      base::BindOnce(
++          [](BrowserOSServerManager* manager,
++             scoped_refptr<base::SequencedTaskRunner> ui_runner) {
++            // Kill old process and wait for exit (blocking, safe on background)
++            manager->TerminateBrowserOSProcess();
++
++            // Post back to UI thread to launch new process
++            ui_runner->PostTask(
++                FROM_HERE,
++                base::BindOnce(&BrowserOSServerManager::LaunchBrowserOSProcess,
++                               base::Unretained(manager)));
++          },
++          base::Unretained(this), ui_task_runner));
 +}
 +
 +void BrowserOSServerManager::SendMCPControlRequest(bool enabled) {
@@ -813,13 +991,13 @@ index 0000000000000..e6bd851f42bfa
 +  return true;
 +}
 +
-+base::FilePath BrowserOSServerManager::GetBrowserOSServerExecutablePath() const {
++base::FilePath BrowserOSServerManager::GetBrowserOSServerResourcesPath() const {
 +  // Check for command-line override first
 +  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-+  if (command_line->HasSwitch("browseros-server-binary")) {
++  if (command_line->HasSwitch("browseros-server-resources-dir")) {
 +    base::FilePath custom_path =
-+        command_line->GetSwitchValuePath("browseros-server-binary");
-+    LOG(INFO) << "browseros: Using custom server binary from command line: "
++        command_line->GetSwitchValuePath("browseros-server-resources-dir");
++    LOG(INFO) << "browseros: Using custom resources dir from command line: "
 +              << custom_path;
 +    return custom_path;
 +  }
@@ -844,7 +1022,6 @@ index 0000000000000..e6bd851f42bfa
 +    return base::FilePath();
 +  }
 +  // Append version directory (chrome.release places BrowserOSServer under versioned dir)
-+  // chrome/installer/mini_installer/chrome.release
 +  exe_dir = exe_dir.AppendASCII(version_info::GetVersionNumber());
 +
 +#elif BUILDFLAG(IS_LINUX)
@@ -855,11 +1032,39 @@ index 0000000000000..e6bd851f42bfa
 +  }
 +#endif
 +
-+  // Navigate to BrowserOSServer/default/ subdirectory
-+  // This structure allows future updates to install to versioned directories
-+  base::FilePath browseros_exe = exe_dir.Append(FILE_PATH_LITERAL("BrowserOSServer"))
-+                                  .Append(FILE_PATH_LITERAL("default"))
-+                                  .Append(FILE_PATH_LITERAL("browseros_server"));
++  // Return path to resources directory
++  return exe_dir.Append(FILE_PATH_LITERAL("BrowserOSServer"))
++      .Append(FILE_PATH_LITERAL("default"))
++      .Append(FILE_PATH_LITERAL("resources"));
++}
++
++base::FilePath BrowserOSServerManager::GetBrowserOSExecutionDir() const {
++  base::FilePath user_data_dir;
++  if (!base::PathService::Get(chrome::DIR_USER_DATA, &user_data_dir)) {
++    LOG(ERROR) << "browseros: Failed to resolve DIR_USER_DATA path";
++    return base::FilePath();
++  }
++
++  base::FilePath exec_dir = user_data_dir.Append(FILE_PATH_LITERAL(".browseros"));
++
++  // Ensure directory exists before returning
++  base::ScopedAllowBlocking allow_blocking;
++  if (!base::PathExists(exec_dir)) {
++    if (!base::CreateDirectory(exec_dir)) {
++      LOG(ERROR) << "browseros: Failed to create execution directory: " << exec_dir;
++      return base::FilePath();
++    }
++  }
++
++  LOG(INFO) << "browseros: Using execution directory: " << exec_dir;
++  return exec_dir;
++}
++
++base::FilePath BrowserOSServerManager::GetBrowserOSServerExecutablePath() const {
++  base::FilePath browseros_exe =
++      GetBrowserOSServerResourcesPath()
++          .Append(FILE_PATH_LITERAL("bin"))
++          .Append(FILE_PATH_LITERAL("browseros_server"));
 +
 +#if BUILDFLAG(IS_WIN)
 +  browseros_exe = browseros_exe.AddExtension(FILE_PATH_LITERAL(".exe"));
@@ -867,3 +1072,5 @@ index 0000000000000..e6bd851f42bfa
 +
 +  return browseros_exe;
 +}
++
++}  // namespace browseros

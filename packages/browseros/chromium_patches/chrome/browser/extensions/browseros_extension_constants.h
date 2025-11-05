@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/extensions/browseros_extension_constants.h b/chrome/browser/extensions/browseros_extension_constants.h
 new file mode 100644
-index 0000000000000..6bb906bc7068f
+index 0000000000000..17b78fbb99a9f
 --- /dev/null
 +++ b/chrome/browser/extensions/browseros_extension_constants.h
-@@ -0,0 +1,74 @@
+@@ -0,0 +1,80 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -29,6 +29,12 @@ index 0000000000000..6bb906bc7068f
 +// Controller Extension ID
 +inline constexpr char kControllerExtensionId[] =
 +    "nlnihljpboknmfagkikhkdblbedophja";
++
++// BrowserOS CDN update manifest URL
++// Used for extensions installed from local .crx files that don't have
++// an update_url in their manifest
++inline constexpr char kBrowserOSUpdateUrl[] =
++    "https://cdn.browseros.com/extensions/update-manifest.xml";
 +
 +// Allowlist of BrowserOS extension IDs that are permitted to be installed
 +// Only extensions with these IDs will be loaded from the config

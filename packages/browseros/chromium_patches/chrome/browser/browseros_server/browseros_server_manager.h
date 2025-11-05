@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/browseros_server/browseros_server_manager.h b/chrome/browser/browseros_server/browseros_server_manager.h
 new file mode 100644
-index 0000000000000..edddc9a8a428c
+index 0000000000000..d991d965c4913
 --- /dev/null
 +++ b/chrome/browser/browseros_server/browseros_server_manager.h
-@@ -0,0 +1,125 @@
+@@ -0,0 +1,138 @@
 +// Copyright 2024 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -13,6 +13,7 @@ index 0000000000000..edddc9a8a428c
 +
 +#include <memory>
 +
++#include "base/files/file.h"
 +#include "base/files/file_path.h"
 +#include "base/memory/ref_counted.h"
 +#include "base/memory/weak_ptr.h"
@@ -29,6 +30,8 @@ index 0000000000000..edddc9a8a428c
 +namespace network {
 +class SimpleURLLoader;
 +}
++
++namespace browseros {
 +
 +// BrowserOS: Manages the lifecycle of the BrowserOS server process (singleton)
 +// This manager:
@@ -80,6 +83,9 @@ index 0000000000000..edddc9a8a428c
 +  BrowserOSServerManager();
 +  ~BrowserOSServerManager();
 +
++  bool AcquireLock();
++  void InitializePortsAndPrefs();
++  void SavePortsToPrefs();
 +  void StartCDPServer();
 +  void StopCDPServer();
 +  void LaunchBrowserOSProcess();
@@ -92,6 +98,7 @@ index 0000000000000..edddc9a8a428c
 +      std::unique_ptr<network::SimpleURLLoader> url_loader,
 +      scoped_refptr<net::HttpResponseHeaders> headers);
 +  void OnMCPEnabledChanged();
++  void OnRestartServerRequestedChanged();
 +  void SendMCPControlRequest(bool enabled);
 +  void OnMCPControlRequestComplete(
 +      bool requested_state,
@@ -103,10 +110,13 @@ index 0000000000000..edddc9a8a428c
 +      scoped_refptr<net::HttpResponseHeaders> headers);
 +  void CheckProcessStatus();
 +
++  base::FilePath GetBrowserOSServerResourcesPath() const;
++  base::FilePath GetBrowserOSExecutionDir() const;
 +  base::FilePath GetBrowserOSServerExecutablePath() const;
 +  int FindAvailablePort(int starting_port);
 +  bool IsPortAvailable(int port);
 +
++  base::File lock_file_;  // System-wide lock to ensure single instance
 +  base::Process process_;
 +  int cdp_port_ = 0;  // CDP port (auto-discovered)
 +  int mcp_port_ = 0;  // MCP port (auto-discovered)
@@ -114,6 +124,7 @@ index 0000000000000..edddc9a8a428c
 +  int extension_port_ = 0;  // Extension port (auto-discovered)
 +  bool mcp_enabled_ = true;  // Whether MCP server is enabled
 +  bool is_running_ = false;
++  bool is_restarting_ = false;  // Whether server is currently restarting
 +  bool init_request_sent_ = false;  // Whether /init request has been sent
 +
 +  // Timer for health checks
@@ -127,5 +138,7 @@ index 0000000000000..edddc9a8a428c
 +
 +  base::WeakPtrFactory<BrowserOSServerManager> weak_factory_{this};
 +};
++
++}  // namespace browseros
 +
 +#endif  // CHROME_BROWSER_BROWSEROS_SERVER_BROWSEROS_SERVER_MANAGER_H_

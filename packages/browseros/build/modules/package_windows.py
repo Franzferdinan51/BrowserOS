@@ -31,7 +31,7 @@ BROWSEROS_SERVER_BINARIES: List[str] = [
 
 def get_browseros_server_binary_paths(build_output_dir: Path) -> List[Path]:
     """Return absolute paths to BrowserOS Server binaries for signing."""
-    server_dir = build_output_dir / "BrowserOSServer" / "default"
+    server_dir = build_output_dir / "BrowserOSServer" / "default" / "resources" / "bin"
     return [server_dir / binary for binary in BROWSEROS_SERVER_BINARIES]
 
 
@@ -69,12 +69,18 @@ def build_mini_installer(ctx: BuildContext) -> bool:
     # Get paths
     build_output_dir = join_paths(ctx.chromium_src, ctx.out_dir)
     mini_installer_path = build_output_dir / "mini_installer.exe"
+    setup_exe_path = build_output_dir / "setup.exe"
 
-    if mini_installer_path.exists():
-        log_info("mini_installer.exe already exists")
-        return True
+    if mini_installer_path.exists() and setup_exe_path.exists():
+        log_info(
+            "mini_installer.exe and setup.exe already exist; rebuilding to ensure freshness"
+        )
+    elif setup_exe_path.exists() and not mini_installer_path.exists():
+        log_info("setup.exe exists but mini_installer.exe missing")
+    elif mini_installer_path.exists() and not setup_exe_path.exists():
+        log_info("mini_installer.exe exists but setup.exe missing")
 
-    log_info("Building mini_installer target...")
+    log_info("Building setup and mini_installer targets...")
 
     # Build mini_installer using autoninja
     try:
@@ -86,6 +92,7 @@ def build_mini_installer(ctx: BuildContext) -> bool:
             autoninja_cmd,
             "-C",
             ctx.out_dir,  # Use relative path like in compile.py
+            "setup",
             "mini_installer",
         ]
 
@@ -101,15 +108,24 @@ def build_mini_installer(ctx: BuildContext) -> bool:
             os.chdir(old_cwd)
 
         # Verify the file was created
-        if mini_installer_path.exists():
-            log_success("mini_installer built successfully")
+        missing_artifacts = []
+        if not setup_exe_path.exists():
+            missing_artifacts.append("setup.exe")
+        if not mini_installer_path.exists():
+            missing_artifacts.append("mini_installer.exe")
+
+        if not missing_artifacts:
+            log_success("mini_installer and setup built successfully")
             return True
-        else:
-            log_error("mini_installer build completed but file not found")
-            return False
+
+        log_error(
+            "Build completed but missing artifacts: "
+            + ", ".join(missing_artifacts)
+        )
+        return False
 
     except Exception as e:
-        log_error(f"Failed to build mini_installer: {e}")
+        log_error(f"Failed to build setup/mini_installer: {e}")
         return False
 
 

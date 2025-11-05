@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/chrome_browser_main.cc b/chrome/browser/chrome_browser_main.cc
-index 681fd3282078c..8b1d525c80bb9 100644
+index 681fd3282078c..df6e7d2cbb9e4 100644
 --- a/chrome/browser/chrome_browser_main.cc
 +++ b/chrome/browser/chrome_browser_main.cc
 @@ -10,6 +10,7 @@
@@ -25,7 +25,7 @@ index 681fd3282078c..8b1d525c80bb9 100644
  
 +  // BrowserOS: Start the BrowserOS server after browser initialization
 +  LOG(INFO) << "browseros: Starting BrowserOS server process";
-+  BrowserOSServerManager::GetInstance()->Start();
++  browseros::BrowserOSServerManager::GetInstance()->Start();
 +
  #if BUILDFLAG(IS_WIN)
    // If the command line specifies 'uninstall' then we need to work here
@@ -37,7 +37,7 @@ index 681fd3282078c..8b1d525c80bb9 100644
 +
 +  // BrowserOS: Stop the BrowserOS server during shutdown
 +  LOG(INFO) << "browseros: Stopping BrowserOS server process";
-+  BrowserOSServerManager::GetInstance()->Shutdown();
++  browseros::BrowserOSServerManager::GetInstance()->Shutdown();
 +
    TranslateService::Shutdown();
  

@@ -52,6 +52,6 @@ jobs:
           # Commit and push the submodule update
           NEW_SHA=$(git -C packages/browseros-agent rev-parse --short HEAD)
           git add packages/browseros-agent
-          git commit -m "Update browserOS-agent submodule to $NEW_SHA"
+          git commit -m "chore: sync packages/browseros-agent submodule (to $NEW_SHA)"
           git push origin main
           echo "Updated submodule to $NEW_SHA"

@@ -45,8 +45,9 @@
         "group": "Core Features",
         "pages": [
           "features/llm-chat-hub",
+          "features/scheduled-tasks",
           "features/ad-blocking",
-          "browseros-mcp/how-to-guide",
+          "features/use-with-claude-code",
           "integrations/n8n"
         ]
       },

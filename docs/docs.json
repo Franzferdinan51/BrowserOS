@@ -47,7 +47,12 @@
           "features/llm-chat-hub",
           "features/scheduled-tasks",
           "features/ad-blocking",
-          "features/use-with-claude-code",
+          "features/use-with-claude-code"
+        ]
+      },
+      {
+        "group": "Integrations",
+        "pages": [
           "integrations/n8n"
         ]
       },

@@ -57,7 +57,7 @@
 [![BrowserOS agent in action](docs/videos/browserOS-agent-in-action.gif)](https://www.youtube.com/watch?v=SoSFev5R5dI)
 <br/><br/>
 
-### 🎇 Install [BrowserOS as MCP](https://docs.browseros.com/browseros-mcp/how-to-guide) and control it from `claude-code`
+### 🎇 Install [BrowserOS as MCP](https://docs.browseros.com/features/use-with-claude-code) and control it from `claude-code`
 
 https://github.com/user-attachments/assets/c725d6df-1a0d-40eb-a125-ea009bf664dc
 

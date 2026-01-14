@@ -25,7 +25,7 @@
           "features/llm-chat-hub",
           "features/scheduled-tasks",
           "features/use-with-claude-code"
-          "features/ad-blocking",
+          "features/ad-blocking"
         ]
       },
       {

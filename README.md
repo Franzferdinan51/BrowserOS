@@ -39,7 +39,7 @@
 
 2. Import your Chrome data (optional)
 
-3. Connect your AI provider — [Gemini](https://aistudio.google.com) is free (20 req/min), or use Claude, OpenAI, or local models via Ollama
+3. Connect your AI provider — use Claude, OpenAI, Gemini , or local models via Ollama and LMStudio.
 
 4. Start automating!
 

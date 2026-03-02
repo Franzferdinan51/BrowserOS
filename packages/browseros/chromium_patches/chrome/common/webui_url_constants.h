@@ -1,16 +1,16 @@
 diff --git a/chrome/common/webui_url_constants.h b/chrome/common/webui_url_constants.h
-index de9e7825e979e..fbe089c8bc7b6 100644
+index ced6f48d16af0..8565fc5f08d6d 100644
 --- a/chrome/common/webui_url_constants.h
 +++ b/chrome/common/webui_url_constants.h
 @@ -33,6 +33,7 @@ namespace chrome {
  // needed.
  // Please keep in alphabetical order, with OS/feature specific sections below.
  inline constexpr char kChromeUIAboutHost[] = "about";
-+inline constexpr char kBrowserOSFirstRun[] = "browseros-first-run";
++inline constexpr char kBrowserOSFirstRun[] = "browseros-welcome";
  inline constexpr char kChromeUIAboutURL[] = "chrome://about/";
  inline constexpr char kChromeUIAccessCodeCastHost[] = "access-code-cast";
  inline constexpr char kChromeUIAccessCodeCastURL[] =
-@@ -62,6 +63,8 @@ inline constexpr char kChromeUIBatchUploadURL[] = "chrome://batch-upload/";
+@@ -65,6 +66,8 @@ inline constexpr char kChromeUIBatchUploadURL[] = "chrome://batch-upload/";
  inline constexpr char kChromeUIBluetoothInternalsHost[] = "bluetooth-internals";
  inline constexpr char kChromeUIBookmarksHost[] = "bookmarks";
  inline constexpr char kChromeUIBookmarksURL[] = "chrome://bookmarks/";

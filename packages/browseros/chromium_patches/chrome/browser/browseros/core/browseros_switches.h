@@ -1,6 +1,6 @@
 diff --git a/chrome/browser/browseros/core/browseros_switches.h b/chrome/browser/browseros/core/browseros_switches.h
 new file mode 100644
-index 0000000000000..dcd8b3ae307f2
+index 0000000000000..8d6fcc30fd568
 --- /dev/null
 +++ b/chrome/browser/browseros/core/browseros_switches.h
 @@ -0,0 +1,86 @@
@@ -85,7 +85,7 @@ index 0000000000000..dcd8b3ae307f2
 +// === Misc Switches ===
 +
 +// Indicates this is the first run of BrowserOS.
-+inline constexpr char kFirstRun[] = "browseros-first-run";
++inline constexpr char kFirstRun[] = "browseros-welcome";
 +
 +}  // namespace browseros
 +

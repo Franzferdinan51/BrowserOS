@@ -45,7 +45,9 @@ async function transcribeAudio(audioBlob: Blob): Promise<string> {
     const errorBody: { error?: string } = await response
       .json()
       .catch(() => ({ error: 'Transcription failed' }))
-    throw new Error(errorBody.error || `Transcription failed: ${response.status}`)
+    throw new Error(
+      errorBody.error || `Transcription failed: ${response.status}`,
+    )
   }
 
   const result: TranscribeResponse = await response.json()
@@ -81,6 +83,7 @@ export function useVoiceInput(): UseVoiceInputReturn {
     setAudioLevels(EMPTY_LEVELS)
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: cleanup only needs to run on unmount
   useEffect(() => {
     return () => {
       streamRef.current?.getTracks().forEach((track) => {
@@ -171,7 +174,9 @@ export function useVoiceInput(): UseVoiceInputReturn {
       setIsRecording(true)
       return true
     } catch (err) {
-      streamRef.current?.getTracks().forEach((track) => track.stop())
+      streamRef.current?.getTracks().forEach((track) => {
+        track.stop()
+      })
       streamRef.current = null
       stopAudioLevelMonitoring()
 

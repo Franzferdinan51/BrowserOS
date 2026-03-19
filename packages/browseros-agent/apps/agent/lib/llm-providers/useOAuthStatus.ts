@@ -74,6 +74,7 @@ export function useOAuthStatus(provider: string): UseOAuthStatusReturn {
   }, [])
 
   // Cleanup on unmount
+  // biome-ignore lint/correctness/useExhaustiveDependencies: cleanup only needs to run on unmount
   useEffect(() => {
     return () => stopPolling()
   }, [])

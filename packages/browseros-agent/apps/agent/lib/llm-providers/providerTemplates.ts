@@ -140,6 +140,15 @@ export const providerTemplates: ProviderTemplate[] = [
     setupGuideUrl:
       'https://docs.aws.amazon.com/bedrock/latest/userguide/getting-started.html',
   }),
+  {
+    id: 'openclaw',
+    name: 'OpenClaw',
+    defaultBaseUrl: 'http://localhost:18789/v1',
+    defaultModelId: 'minimax-m2.7',
+    supportsImages: true,
+    contextWindow: 1000000,
+    setupGuideUrl: 'https://docs.openclaw.ai/concepts/models',
+  },
 ]
 
 /**
@@ -161,6 +170,7 @@ export const providerTypeOptions: { value: ProviderType; label: string }[] = [
   { value: 'lmstudio', label: 'LM Studio' },
   { value: 'bedrock', label: 'AWS Bedrock' },
   { value: 'browseros', label: 'BrowserOS' },
+  { value: 'openclaw', label: 'OpenClaw' },
 ]
 
 /**
@@ -192,6 +202,7 @@ export const DEFAULT_BASE_URLS: Record<ProviderType, string> = {
   lmstudio: 'http://localhost:1234/v1',
   bedrock: '',
   browseros: '',
+  openclaw: 'http://localhost:18789/v1',
 }
 
 /**

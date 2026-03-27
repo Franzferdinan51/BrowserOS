@@ -199,6 +199,21 @@ function createChatGPTProFactory(
   }).responses
 }
 
+function createOpenCLAWFactory(
+  config: ResolvedAgentConfig,
+): (modelId: string) => unknown {
+  // OpenClaw gateway: baseUrl = gateway URL, apiKey = auth token
+  // Default gateway URL is http://localhost:18789
+  const baseUrl = config.baseUrl || 'http://localhost:18789'
+  // OpenClaw uses /v1/chat/completions for OpenAI-compatible endpoint
+  const url = baseUrl.endsWith('/') ? `${baseUrl}v1` : `${baseUrl}/v1`
+  return createOpenAICompatible({
+    name: 'openclaw',
+    baseURL: url,
+    ...(config.apiKey && { apiKey: config.apiKey }),
+  })
+}
+
 const PROVIDER_FACTORIES: Record<string, ProviderFactory> = {
   [LLM_PROVIDERS.ANTHROPIC]: createAnthropicFactory,
   [LLM_PROVIDERS.OPENAI]: createOpenAIFactory,
@@ -214,6 +229,7 @@ const PROVIDER_FACTORIES: Record<string, ProviderFactory> = {
   [LLM_PROVIDERS.CHATGPT_PRO]: createChatGPTProFactory,
   [LLM_PROVIDERS.GITHUB_COPILOT]: createGitHubCopilotFactory,
   [LLM_PROVIDERS.QWEN_CODE]: createQwenCodeFactory,
+  [LLM_PROVIDERS.OPENCLAW]: createOpenCLAWFactory,
 }
 
 export function createLanguageModel(

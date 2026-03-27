@@ -202,16 +202,13 @@ function createChatGPTProFactory(
 function createOpenCLAWFactory(
   config: ResolvedAgentConfig,
 ): (modelId: string) => unknown {
-  // OpenClaw gateway: baseUrl = gateway URL, apiKey = auth token
-  // Default gateway URL is http://localhost:18789
-  const baseUrl = config.baseUrl || 'http://localhost:18789'
-  // OpenClaw uses /v1/chat/completions for OpenAI-compatible endpoint
-  const url = baseUrl.endsWith('/') ? `${baseUrl}v1` : `${baseUrl}/v1`
-  return createOpenAICompatible({
-    name: 'openclaw',
-    baseURL: url,
-    ...(config.apiKey && { apiKey: config.apiKey }),
-  })
+  // Uses the native OpenClaw gateway WebSocket client — not OpenAI-compatible HTTP.
+  // The OpenClawLanguageModel handles WebSocket connection, device identity auth,
+  // RPC calls, and streaming events directly through the gateway.
+  const { createOpenClawLanguageModel } = require('./openclaw')
+  return createOpenClawLanguageModel(config.model) as unknown as (
+    modelId: string,
+  ) => unknown
 }
 
 const PROVIDER_FACTORIES: Record<string, ProviderFactory> = {
@@ -236,6 +233,13 @@ export function createLanguageModel(
   config: ResolvedAgentConfig,
 ): LanguageModel {
   const provider = config.provider as string
+
+  // OpenClaw uses the native WebSocket gateway client — bypass the factory callable pattern
+  if (provider === LLM_PROVIDERS.OPENCLAW) {
+    const { createOpenClawLanguageModel } = require('./openclaw')
+    return createOpenClawLanguageModel(config.model) as LanguageModel
+  }
+
   const factory = PROVIDER_FACTORIES[provider]
   if (!factory) throw new Error(`Unknown provider: ${provider}`)
   return factory(config)(config.model) as LanguageModel

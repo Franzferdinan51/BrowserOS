@@ -13,6 +13,7 @@ import { createCodexFetch } from '../lib/clients/oauth/codex-fetch'
 import { createCopilotFetch } from '../lib/clients/oauth/copilot-fetch'
 import { logger } from '../lib/logger'
 import { createOpenRouterCompatibleFetch } from '../lib/openrouter-fetch'
+import { createOpenClawLanguageModel } from './openclaw'
 import type { ResolvedAgentConfig } from './types'
 
 type ProviderFactory = (
@@ -205,7 +206,7 @@ function createOpenCLAWFactory(
   // Uses the native OpenClaw gateway WebSocket client — not OpenAI-compatible HTTP.
   // The OpenClawLanguageModel handles WebSocket connection, device identity auth,
   // RPC calls, and streaming events directly through the gateway.
-  const { createOpenClawLanguageModel } = require('./openclaw')
+  // createOpenClawLanguageModel imported at top level
   return createOpenClawLanguageModel(config.model) as unknown as (
     modelId: string,
   ) => unknown
@@ -236,7 +237,7 @@ export function createLanguageModel(
 
   // OpenClaw uses the native WebSocket gateway client — bypass the factory callable pattern
   if (provider === LLM_PROVIDERS.OPENCLAW) {
-    const { createOpenClawLanguageModel } = require('./openclaw')
+    // createOpenClawLanguageModel imported at top level
     return createOpenClawLanguageModel(config.model) as LanguageModel
   }
 

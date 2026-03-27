@@ -144,7 +144,7 @@ class OpenClawLanguageModel {
     const sessionKey = `browseros-${Date.now()}`
 
     try {
-      const result = (await client.request('/chat.send', {
+      const result = (await client.request('chat.send', {
         sessionKey,
         message: messages.join('\n'),
         model: this.modelId,
@@ -232,7 +232,7 @@ class OpenClawLanguageModel {
 
     try {
       // Send with streaming — gateway will push events via the callback
-      await client.request('/chat.send', {
+      await client.request('chat.send', {
         sessionKey,
         message: messages.join('\n'),
         model: this.modelId,

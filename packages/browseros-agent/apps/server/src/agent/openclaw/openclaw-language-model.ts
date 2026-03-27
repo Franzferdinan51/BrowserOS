@@ -19,38 +19,36 @@ const DEFAULT_MODEL = 'minimax-m2.7'
 // Stream event handler (extracted to reduce cognitive complexity)
 // ---------------------------------------------------------------------------
 
+interface StreamHandlers {
+  push: (part: StreamPart) => void
+  done: () => void
+}
+
 function createStreamHandler(
-  receivedParts: StreamPart[],
-  onDone: () => void,
+  handlers: StreamHandlers,
 ): (event: GatewayStreamEvent) => void {
   return (event: GatewayStreamEvent) => {
     if (event.type === 'finish' || event.type === 'error') {
-      if (event.usage) {
-        receivedParts.push({ type: 'usage', usage: event.usage })
-      }
-      if (event.finishReason) {
-        receivedParts.push({ type: 'finish', finishReason: event.finishReason })
-      }
       if (event.type === 'error') {
-        receivedParts.push({ type: 'error', error: event.content })
+        handlers.push({ type: 'error', error: event.content })
       }
-      onDone()
+      handlers.done()
     } else if (event.type === 'text' || event.type === 'thinking') {
-      receivedParts.push({
+      handlers.push({
         type: event.type === 'thinking' ? 'reasoning-delta' : 'text-delta',
         [event.type === 'thinking' ? 'reasoningDelta' : 'textDelta']:
           event.content ?? '',
       })
     } else if (event.type === 'tool_call') {
       const argsJson = event.toolArgs ? JSON.stringify(event.toolArgs) : '{}'
-      receivedParts.push({
+      handlers.push({
         type: 'tool-call',
         toolName: event.toolName,
         toolArgs: argsJson,
         toolJson: argsJson,
       })
     } else if (event.type === 'tool_result') {
-      receivedParts.push({
+      handlers.push({
         type: 'tool-delta',
         toolName: event.toolName,
         toolJson: event.toolResult,
@@ -60,7 +58,7 @@ function createStreamHandler(
 }
 
 // ---------------------------------------------------------------------------
-// Types (mirroring AI SDK stream shapes)
+// Types
 // ---------------------------------------------------------------------------
 
 interface GenerateResult {
@@ -141,53 +139,14 @@ class OpenClawLanguageModel {
     const client = getGatewayClient()
     await client.connect()
 
-    // Build message text from prompt
-    const messages: Array<{ role: string; content: string }> = []
-    if (options.system) {
-      messages.push({ role: 'system', content: options.system })
-    }
-    for (const item of options.prompt) {
-      if (typeof item.content === 'string') {
-        messages.push({
-          role: item.role as 'user' | 'assistant',
-          content: item.content,
-        })
-      } else {
-        const text = item.content
-          .filter((c) => c.type === 'text')
-          .map((c) => c.text ?? '')
-          .join('\n')
-        if (text) {
-          messages.push({
-            role: item.role as 'user' | 'assistant',
-            content: text,
-          })
-        }
-      }
-    }
-
-    // Serialize tools
-    const tools: Array<{
-      name: string
-      description?: string
-      parameters: Record<string, unknown>
-    }> = []
-    if (options.tools?.length) {
-      for (const t of options.tools) {
-        tools.push({
-          name: t.name,
-          description: t.description,
-          parameters: t.parameters,
-        })
-      }
-    }
-
+    const messages = buildMessages(options)
+    const tools = buildTools(options)
     const sessionKey = `browseros-${Date.now()}`
 
     try {
       const result = (await client.request('/chat.send', {
         sessionKey,
-        message: messages.map((m) => `[${m.role}]: ${m.content}`).join('\n'),
+        message: messages.join('\n'),
         model: this.modelId,
         tools: tools.length > 0 ? JSON.stringify(tools) : undefined,
         stream: false,
@@ -210,7 +169,7 @@ class OpenClawLanguageModel {
         },
         rawCall: {
           model: this.modelId,
-          prompt: messages.map((m) => m.content).join('\n'),
+          prompt: messages.join('\n'),
         },
       }
     } catch (err) {
@@ -218,17 +177,14 @@ class OpenClawLanguageModel {
         text: '',
         finishReason: 'error',
         usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-        rawCall: {
-          model: this.modelId,
-          prompt: messages.map((m) => m.content).join('\n'),
-        },
+        rawCall: { model: this.modelId, prompt: messages.join('\n') },
         raw: err,
       }
     }
   }
 
   // -------------------------------------------------------------------------
-  // doStream
+  // doStream — yields chunks immediately as gateway events arrive
   // -------------------------------------------------------------------------
 
   async *doStream(options: {
@@ -257,72 +213,34 @@ class OpenClawLanguageModel {
     const client = getGatewayClient()
     await client.connect()
 
-    // Build message text
-    const messages: Array<{ role: string; content: string }> = []
-    if (options.system) {
-      messages.push({ role: 'system', content: options.system })
-    }
-    for (const item of options.prompt) {
-      if (typeof item.content === 'string') {
-        messages.push({
-          role: item.role as 'user' | 'assistant',
-          content: item.content,
-        })
-      } else {
-        const text = item.content
-          .filter((c) => c.type === 'text')
-          .map((c) => c.text ?? '')
-          .join('\n')
-        if (text) {
-          messages.push({
-            role: item.role as 'user' | 'assistant',
-            content: text,
-          })
-        }
-      }
-    }
-
-    // Serialize tools
-    const tools: Array<{
-      name: string
-      description?: string
-      parameters: Record<string, unknown>
-    }> = []
-    if (options.tools?.length) {
-      for (const t of options.tools) {
-        tools.push({
-          name: t.name,
-          description: t.description,
-          parameters: t.parameters,
-        })
-      }
-    }
-
+    const messages = buildMessages(options)
+    const tools = buildTools(options)
     const sessionKey = `browseros-${Date.now()}`
 
-    // Collect stream parts
-    const receivedParts: StreamPart[] = []
-    let resolveStream: () => void
-    const streamDone = new Promise<void>((resolve) => {
-      resolveStream = resolve
-    })
-    const unsubscribe = client.onStreamEvent(
-      createStreamHandler(receivedParts, () => {
-        unsubscribe()
-        resolveStream()
-      }),
-    )
+    // Queue-based streaming: push parts as they arrive, yield from queue in loop
+    const queue: StreamPart[] = []
+    let streamDone = false
 
-    // Send the message with streaming
+    const handlers: StreamHandlers = {
+      push: (part) => queue.push(part),
+      done: () => {
+        streamDone = true
+      },
+    }
+
+    const unsubscribe = client.onStreamEvent(createStreamHandler(handlers))
+
     try {
+      // Send with streaming — gateway will push events via the callback
       await client.request('/chat.send', {
         sessionKey,
-        message: messages.map((m) => `[${m.role}]: ${m.content}`).join('\n'),
+        message: messages.join('\n'),
         model: this.modelId,
         tools: tools.length > 0 ? JSON.stringify(tools) : undefined,
         stream: true,
       })
     } catch (err) {
+      unsubscribe()
       yield {
         type: 'error',
         error: err instanceof Error ? err.message : String(err),
@@ -330,13 +248,119 @@ class OpenClawLanguageModel {
       return
     }
 
-    // Wait for the stream to complete
-    await streamDone
+    // Yield chunks as they arrive — the loop wakes up whenever queue grows
+    let head = 0
+    while (true) {
+      // Yield all newly queued items
+      while (head < queue.length) {
+        const part = queue[head++]
+        // Don't yield terminal parts yet — wait for stream to fully drain
+        if (
+          part.type !== 'finish' &&
+          part.type !== 'error' &&
+          part.type !== 'usage'
+        ) {
+          yield part
+        }
+      }
 
-    for (const part of receivedParts) {
-      yield part
+      // Exit when stream is done and queue is drained
+      if (streamDone) {
+        // Drain any remaining usage/finish parts
+        while (head < queue.length) {
+          yield queue[head++]
+        }
+        break
+      }
+
+      // Wait for more events to arrive before next iteration
+      // Use a promise that resolves when the queue grows or stream ends
+      await waitForQueueChange(queue, () => streamDone)
+    }
+
+    unsubscribe()
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function buildMessages(options: {
+  system?: string
+  prompt: Array<{
+    role: 'system' | 'user' | 'assistant'
+    content:
+      | string
+      | Array<{ type: 'text' | 'image'; text?: string; image?: string }>
+  }>
+}): string[] {
+  const messages: string[] = []
+  if (options.system) {
+    messages.push(`[system]: ${options.system}`)
+  }
+  for (const item of options.prompt) {
+    if (typeof item.content === 'string') {
+      messages.push(`[${item.role}]: ${item.content}`)
+    } else {
+      const text = item.content
+        .filter((c) => c.type === 'text')
+        .map((c) => c.text ?? '')
+        .join('\n')
+      if (text) {
+        messages.push(`[${item.role}]: ${text}`)
+      }
     }
   }
+  return messages
+}
+
+function buildTools(options: {
+  tools?: Array<{
+    type: 'function'
+    name: string
+    description?: string
+    parameters: Record<string, unknown>
+  }>
+}): Array<{
+  name: string
+  description?: string
+  parameters: Record<string, unknown>
+}> {
+  const tools: Array<{
+    name: string
+    description?: string
+    parameters: Record<string, unknown>
+  }> = []
+  if (options.tools?.length) {
+    for (const t of options.tools) {
+      tools.push({
+        name: t.name,
+        description: t.description,
+        parameters: t.parameters,
+      })
+    }
+  }
+  return tools
+}
+
+function waitForQueueChange(
+  queue: StreamPart[],
+  isDone: () => boolean,
+): Promise<void> {
+  return new Promise((resolve) => {
+    // Check every 10ms — lightweight polling for stream events
+    const check = (): void => {
+      if (isDone()) {
+        resolve()
+      } else if (queue.length > 0) {
+        resolve()
+      } else {
+        setTimeout(check, 10)
+      }
+    }
+    setTimeout(check, 10)
+  })
 }
 
 // ---------------------------------------------------------------------------
